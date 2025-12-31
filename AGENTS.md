@@ -75,6 +75,8 @@ If a phase is incomplete, stop.
 Phase 0 contracts are frozen. Agents must not modify snapshot contracts,
 missing-data semantics, alignment rules, or serialization format.
 
+Phase 1 — Feature Library is frozen. Agents must not modify Feature Library.
+
 ---
 
 ## Determinism & Explainability

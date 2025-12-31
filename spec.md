@@ -1,5 +1,9 @@
 # Regime Engine — Foundation Specificationasdf
 
+---
+
+## Freeze Declarations
+
 ## Phase 0 Freeze Declaration
 
 Phase 0 (Data Contracts & Snapshot Builder) is declared frozen.
@@ -12,6 +16,10 @@ The following are now stable and breaking-change protected:
 - Snapshot serialization format
 
 Changes to Phase 0 contracts require explicit versioning and downstream review.
+
+## Phase 1 Freeze Declaration
+
+Phase 1 — Feature Library is declared frozen.
 
 ---
 
