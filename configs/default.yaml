@@ -1,0 +1,4 @@
+# Placeholder config. Phase 0 does not read this file.
+cadence_ms: 180000
+hysteresis_window_updates: 3
+
