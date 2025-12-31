@@ -12,9 +12,10 @@ These rules exist to prevent architectural drift.
 This repository implements the **Regime Engine** for xray-vision.
 
 The Regime Engine is the **truth layer** of the system.
-It explains *why* price is moving and what behaviors are allowed.
+It explains _why_ price is moving and what behaviors are allowed.
 
 It does NOT:
+
 - Generate trade signals
 - Scan patterns
 - Execute trades
@@ -38,10 +39,12 @@ Downstream systems may **not** recompute regime logic.
 ## Architectural Boundaries
 
 - `engine.py` is the **public, stable API**
+
   - Downstream code depends only on this
   - Breaking changes are forbidden without explicit approval
 
 - `pipeline.py` is **internal**
+
   - Implementation may change freely
   - Must not leak downstream
 
@@ -55,15 +58,15 @@ Downstream systems may **not** recompute regime logic.
 
 Development proceeds strictly in order:
 
-1. Contracts & snapshot builder  
-2. Feature computation  
-3. Regime scoring  
-4. Hard vetoes  
-5. Resolution & confidence  
-6. Explainability  
-7. Hysteresis & memory  
-8. Logging, replay, evaluation  
-9. Integration readiness  
+1. Contracts & snapshot builder
+2. Feature computation
+3. Regime scoring
+4. Hard vetoes
+5. Resolution & confidence
+6. Explainability
+7. Hysteresis & memory
+8. Logging, replay, evaluation
+9. Integration readiness
 
 Later phases may **not** be partially implemented early.
 
@@ -96,3 +99,18 @@ Wrong is acceptable. Vague is not.
 - Additions require removals
 - Downstream refactors are not allowed
 - Convenience changes that weaken constraints are forbidden
+
+---
+
+## Development Environment (Invariant)
+
+- This project uses a local virtual environment located at `.venv/`.
+- All Python execution, testing, and tooling must run inside this environment.
+- The package must be installed in editable mode before running tests:
+  - `pip install -e .`
+- Do not assume system Python is usable.
+- Do not invoke `python`, `pip`, or test runners outside the active `.venv`.
+- Do not modify Python version constraints unless explicitly instructed.
+
+If imports fail, the correct fix is to activate `.venv` and ensure the editable install,
+not to modify sys.path or test files.
