@@ -25,6 +25,10 @@ Phase 1 — Feature Library is declared frozen.
 
 Phase 2 — Regime Taxonomy & Scoring is declared frozen.
 
+## Phase 3 — Freeze Declaration
+
+Phase 3 — Hard Veto Logic is declared frozen.
+
 ---
 
 ## 1. Purpose

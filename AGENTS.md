@@ -79,6 +79,8 @@ Phase 1 — Feature Library is frozen. Agents must not modify Feature Library.
 
 Phase4 2 — Regime Taxonomy. Agents must not modify Regime Taxonomy.
 
+Phase 3 — Hard Veto Logic is declared frozen. Agents must not modify Hard Veto Logic.
+
 ---
 
 ## Determinism & Explainability
