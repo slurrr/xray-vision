@@ -85,6 +85,8 @@ Phase 4 — Resolution & Confidence is declared frozen. Agents must not modify R
 
 Phase 5 — Confidence Synthesis is declared frozen. Agents must not modify Confidence Synthesis.
 
+Phase 6 — Explainability is declared frozen. Agents must not modify Explainability.
+
 ---
 
 ## Determinism & Explainability

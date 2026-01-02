@@ -46,8 +46,6 @@
 
 - [x] Regime ranking logic
 - [x] Confidence calculation
-- [ ] Pillar agreement scoring (deferred)
-- [ ] Stability inputs (deferred)
 
 ---
 
@@ -62,15 +60,16 @@
 
 ## Phase 6 — Explainability
 
-- [ ] Driver extraction
-- [ ] Invalidation rule generation
-- [ ] Permission mapping
-- [ ] Enforce non-empty explainability fields
+- [x] Driver extraction
+- [x] Invalidation rule generation
+- [x] Permission mapping
+- [x] Enforce non-empty explainability fields
 
 ---
 
 ## Phase 7 — Hysteresis & Memory
 
+- [ ] Stability inputs
 - [ ] Regime persistence tracking
 - [ ] Flip threshold logic
 - [ ] Confidence decay

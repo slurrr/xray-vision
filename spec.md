@@ -37,6 +37,10 @@ Phase 4 — Resolution & Confidence is declared frozen.
 
 Phase 5 — Confidence Synthesis is declared frozen.
 
+## Phase 6 — Freeze Declaration
+
+Phase 6 — Explainability is declared frozen.
+
 ---
 
 ## 1. Purpose
