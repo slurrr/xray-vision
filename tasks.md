@@ -46,12 +46,21 @@
 
 - [x] Regime ranking logic
 - [x] Confidence calculation
-- [ ] Pillar agreement scoring
-- [ ] Stability inputs
+- [ ] Pillar agreement scoring (deferred)
+- [ ] Stability inputs (deferred)
 
 ---
 
-## Phase 5 — Explainability
+## Phase 5 — Confidence Synthesis
+
+- [x] Pillar grouping
+- [x] Pillar agreement scoring
+- [x] Confidence synthesis
+- [x] Confidence explainability breakdown
+
+---
+
+## Phase 6 — Explainability
 
 - [ ] Driver extraction
 - [ ] Invalidation rule generation
@@ -60,7 +69,7 @@
 
 ---
 
-## Phase 6 — Hysteresis & Memory
+## Phase 7 — Hysteresis & Memory
 
 - [ ] Regime persistence tracking
 - [ ] Flip threshold logic
@@ -68,7 +77,7 @@
 
 ---
 
-## Phase 7 — Logging & Evaluation Harness
+## Phase 8 — Logging & Evaluation Harness
 
 - [ ] JSONL regime logs
 - [ ] Snapshot replay runner
@@ -78,7 +87,7 @@
 
 ---
 
-## Phase 8 — Integration Readiness
+## Phase 9 — Integration Readiness
 
 - [ ] Stable RegimeOutput API
 - [ ] State Gate compatibility check

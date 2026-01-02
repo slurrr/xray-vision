@@ -29,6 +29,14 @@ Phase 2 — Regime Taxonomy & Scoring is declared frozen.
 
 Phase 3 — Hard Veto Logic is declared frozen.
 
+## Phase 4 — Freeze Declaration
+
+Phase 4 — Resolution & Confidence is declared frozen.
+
+## Phase 5 — Freeze Declaration
+
+Phase 5 — Confidence Synthesis is declared frozen.
+
 ---
 
 ## 1. Purpose

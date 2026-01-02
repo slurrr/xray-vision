@@ -81,6 +81,10 @@ Phase4 2 — Regime Taxonomy. Agents must not modify Regime Taxonomy.
 
 Phase 3 — Hard Veto Logic is declared frozen. Agents must not modify Hard Veto Logic.
 
+Phase 4 — Resolution & Confidence is declared frozen. Agents must not modify Resolution & Conficence.
+
+Phase 5 — Confidence Synthesis is declared frozen. Agents must not modify Confidence Synthesis.
+
 ---
 
 ## Determinism & Explainability
