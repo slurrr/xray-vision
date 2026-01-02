@@ -26,16 +26,16 @@
 
 ## Phase 2 — Regime Taxonomy & Scoring
 
-- [ ] Define Regime enum
-- [ ] Define RegimeScore model
-- [ ] Scoring stubs per regime
-- [ ] Weighted scoring logic
-- [ ] Contributor string generation
+- [x] Define Regime enum
+- [x] Define RegimeScore model
+- [x] Scoring stubs per regime
+- [x] Contributor string generation
 
 ---
 
 ## Phase 3 — Hard Veto Logic
 
+- [ ] Weighted scoring logic
 - [ ] Veto rule framework
 - [ ] Encode core truth constraints
 - [ ] Veto logging
