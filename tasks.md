@@ -38,14 +38,14 @@
 - [x] Weighted scoring logic
 - [x] Veto rule framework
 - [x] Encode core truth constraints
-- [ ] Veto logging
+- [x] Veto logging
 
 ---
 
 ## Phase 4 — Resolution & Confidence
 
-- [ ] Regime ranking logic
-- [ ] Confidence calculation
+- [x] Regime ranking logic
+- [x] Confidence calculation
 - [ ] Pillar agreement scoring
 - [ ] Stability inputs
 
