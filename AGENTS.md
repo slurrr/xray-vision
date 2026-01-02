@@ -77,6 +77,8 @@ missing-data semantics, alignment rules, or serialization format.
 
 Phase 1 — Feature Library is frozen. Agents must not modify Feature Library.
 
+Phase4 2 — Regime Taxonomy. Agents must not modify Regime Taxonomy.
+
 ---
 
 ## Determinism & Explainability

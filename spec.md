@@ -21,6 +21,10 @@ Changes to Phase 0 contracts require explicit versioning and downstream review.
 
 Phase 1 — Feature Library is declared frozen.
 
+## Phase 2 Freeze Declaration
+
+Phase 2 — Regime Taxonomy & Scoring is declared frozen.
+
 ---
 
 ## 1. Purpose
