@@ -35,9 +35,9 @@
 
 ## Phase 3 — Hard Veto Logic
 
-- [ ] Weighted scoring logic
-- [ ] Veto rule framework
-- [ ] Encode core truth constraints
+- [x] Weighted scoring logic
+- [x] Veto rule framework
+- [x] Encode core truth constraints
 - [ ] Veto logging
 
 ---
