@@ -61,7 +61,6 @@ All downstream layers depend on it.
 
 ## 2. Architectural Position
 
-asdf
 Market Feeds
 → Regime Engine
 ├─ Phase 0: Data contracts + snapshot builder

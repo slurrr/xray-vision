@@ -78,17 +78,17 @@
 
 ## Phase 8 — Logging & Evaluation Harness
 
-- [ ] JSONL regime logs
-- [ ] Snapshot replay runner
-- [ ] Regime flip statistics
-- [ ] Forward return analysis
-- [ ] Regime expectancy report
+- [x] JSONL regime logs
+- [x] Snapshot replay runner
+- [x] Regime flip statistics
+- [x] Forward return analysis
+- [x] Regime expectancy report
 
 ---
 
 ## Phase 9 — Integration Readiness
 
-- [ ] Stable RegimeOutput API
-- [ ] State Gate compatibility check
-- [ ] Pattern layer dependency audit
-- [ ] Documentation pass
+- [x] Stable RegimeOutput API
+- [x] State Gate compatibility check
+- [x] Pattern layer dependency audit
+- [x] Documentation pass
