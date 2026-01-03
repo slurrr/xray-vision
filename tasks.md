@@ -69,10 +69,10 @@
 
 ## Phase 7 — Hysteresis & Memory
 
-- [ ] Stability inputs
-- [ ] Regime persistence tracking
-- [ ] Flip threshold logic
-- [ ] Confidence decay
+- [x] Stability inputs
+- [x] Regime persistence tracking
+- [x] Flip threshold logic
+- [x] Confidence decay
 
 ---
 
