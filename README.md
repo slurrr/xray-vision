@@ -1,37 +1,50 @@
-# xray-vision — Regime Engine
+# xray-vision
+
+Each top-level subsystem is governed by its own AGENTS.md, spec.md and tasks.md.
+Rules are scoped to their directory tree.
+
+## Maket Data
+
+## Regime Engine
 
 The Regime Engine is the truth layer of a crypto scanner. It classifies why price is
 moving, determines allowed behaviors, and exposes invalidations. All downstream
 layers depend on its outputs and may not recompute regime logic.
 
 What it does:
+
 - Deterministic regime classification from frozen inputs
 - Emits immutable `RegimeOutput` with drivers, invalidations, and permissions
 - Optional hysteresis wrapper for operational stability (separate from truth)
 
 What it does not do:
+
 - Generate trade signals
 - Scan patterns
 - Execute trades
 - Recompute regime logic downstream
 
 Non-goals:
+
 - Pattern detection
 - Trade signals
 - Execution logic
 - Strategy assumptions
 
 Phase discipline:
+
 - Follow `tasks.md` strictly in order.
 - Contracts come first. Do not implement features/scoring/veto/hysteresis logic
   until Phase 0 contracts are complete and frozen.
 
 Determinism requirements:
+
 - Frozen dataclasses for snapshots and outputs
 - Explicit missing data representation (never silent)
 - Snapshot serialization suitable for replay
 
 Public entrypoints:
+
 - `regime_engine.engine.run(snapshot) -> RegimeOutput` (truth API)
 - `regime_engine.engine.run_with_hysteresis(snapshot, state, config) -> HysteresisDecision`
 

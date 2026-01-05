@@ -1,128 +1,72 @@
-# AGENTS.md — Regime Engine Canonical Rules
+# AGENTS.md — Repository-Level Rules
 
-This file defines **mandatory constraints** for all non-human contributors
-(e.g., Codex, automation, scripted refactors).
+This file defines **repository-wide, non-semantic constraints**
+for all non-human contributors (e.g., Codex, automation).
 
-These rules exist to prevent architectural drift.
+Subsystem-specific rules live in each directory’s `AGENTS.md`
+and **override this file**.
 
----
-
-## Project Identity
-
-This repository implements the **Regime Engine** for xray-vision.
-
-The Regime Engine is the **truth layer** of the system.
-It explains _why_ price is moving and what behaviors are allowed.
-
-It does NOT:
-
-- Generate trade signals
-- Scan patterns
-- Execute trades
-- Perform strategy logic
-
-Downstream systems may **not** recompute regime logic.
+If rules conflict, the **closest AGENTS.md in the directory tree wins**.
 
 ---
 
-## Source of Truth
+## Repository Identity
 
-- `spec.md` defines the canonical system truth:
-  - Regime taxonomy
-  - Input/output contracts
-  - Scoring principles
-  - Explainability requirements
-- If code or tasks conflict with `spec.md`, the spec wins.
+This is a **multi-layer mono-repo** for the xray-vision system.
 
----
+Each top-level subsystem is:
+- Independently governed
+- Independently spec’d
+- Independently evolvable
 
-## Architectural Boundaries
-
-- `engine.py` is the **public, stable API**
-
-  - Downstream code depends only on this
-  - Breaking changes are forbidden without explicit approval
-
-- `pipeline.py` is **internal**
-
-  - Implementation may change freely
-  - Must not leak downstream
-
-- `contracts/` contains **frozen dataclasses**
-  - Changes here are breaking changes
-  - No business logic is allowed in contracts
+No subsystem is authoritative outside its scope.
 
 ---
 
-## Phase Discipline (Mandatory)
+## Scope Discipline (Mandatory)
 
-Development proceeds strictly in order:
+- Changes must be limited to the active subsystem
+- Cross-subsystem edits require explicit instruction
+- Files may not be moved across subsystem boundaries casually
 
-1. Contracts & snapshot builder
-2. Feature computation
-3. Regime scoring
-4. Hard vetoes
-5. Resolution & confidence
-6. Explainability
-7. Hysteresis & memory
-8. Logging, replay, evaluation
-9. Integration readiness
-
-Later phases may **not** be partially implemented early.
-
-If a phase is incomplete, stop.
-
-Phase 0 contracts are frozen. Agents must not modify snapshot contracts,
-missing-data semantics, alignment rules, or serialization format.
-
-Phase 1 — Feature Library is frozen. Agents must not modify Feature Library.
-
-Phase4 2 — Regime Taxonomy. Agents must not modify Regime Taxonomy.
-
-Phase 3 — Hard Veto Logic is declared frozen. Agents must not modify Hard Veto Logic.
-
-Phase 4 — Resolution & Confidence is declared frozen. Agents must not modify Resolution & Conficence.
-
-Phase 5 — Confidence Synthesis is declared frozen. Agents must not modify Confidence Synthesis.
-
-Phase 6 — Explainability is declared frozen. Agents must not modify Explainability.
+If unsure, stop.
 
 ---
 
-## Determinism & Explainability
+## Architectural Authority
 
-- All regime inputs are frozen dataclasses
-- Missing data must be explicit and propagated
-- Regime outputs must include:
-  - drivers
-  - invalidations
-  - permissions
-- Empty explainability fields invalidate the output
+- High-level system intent is documented in:
+  - `ARCHITECTURE_NEXT_LAYERS.md`
+- Subsystem behavior is defined by:
+  - `spec.md` within that subsystem
 
-Snapshot replay and JSONL logging are mandatory.
-
-Wrong is acceptable. Vague is not.
-
----
-
-## Change Discipline
-
-- Regime taxonomy is locked
-- Additions require removals
-- Downstream refactors are not allowed
-- Convenience changes that weaken constraints are forbidden
+If code conflicts with a spec, the spec wins.
 
 ---
 
 ## Development Environment (Invariant)
 
-- This project uses a local virtual environment located at `.venv/`.
-- All Python execution, testing, and tooling must run inside this environment.
-- The package must be installed in editable mode before running tests:
+- A local virtual environment at `.venv/` is mandatory
+- All tooling must run inside the active `.venv`
+- Install the package in editable mode before development:
   - `pip install -e .`
-- Do not assume system Python is usable.
-- Do not invoke `python`, `pip`, or test runners outside the active `.venv`.
-- Do not modify Python version constraints unless explicitly instructed.
 
-If imports fail, the correct fix is to activate `.venv` and ensure the editable install,
-not to modify sys.path or test files.
+Do not modify `sys.path` or bypass the environment.
+
+---
+
+## Change Discipline
+
+- No speculative refactors
+- No “helpful” generalizations
+- No semantic interpretation without a spec change
+
+When rules are unclear, do not guess.
+
+---
+
+## Final Rule
+
+This file sets **guardrails, not logic**.
+
+All domain rules belong in subsystem-level `AGENTS.md`.
