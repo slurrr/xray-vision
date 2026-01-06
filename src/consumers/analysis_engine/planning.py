@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Sequence
 
 from .contracts import ArtifactSchema, ModuleDefinition, ModuleKind
 from .modules import AnalysisModule
@@ -20,15 +20,19 @@ class ExecutionStep:
 
 @dataclass(frozen=True)
 class ExecutionPlan:
-    steps_by_stage: Dict[ModuleKind, Sequence[ExecutionStep]]
+    steps_by_stage: dict[ModuleKind, Sequence[ExecutionStep]]
 
 
-def build_execution_plan(registry: ModuleRegistry, enabled_module_ids: Sequence[str]) -> ExecutionPlan:
+def build_execution_plan(
+    registry: ModuleRegistry, enabled_module_ids: Sequence[str]
+) -> ExecutionPlan:
     registry.validate_dependencies(enabled_module_ids)
-    modules: Dict[str, AnalysisModule] = {module_id: registry.modules[module_id] for module_id in enabled_module_ids}
+    modules: dict[str, AnalysisModule] = {
+        module_id: registry.modules[module_id] for module_id in enabled_module_ids
+    }
     _validate_stage_dependencies(modules)
 
-    steps_by_stage: Dict[ModuleKind, Sequence[ExecutionStep]] = {}
+    steps_by_stage: dict[ModuleKind, Sequence[ExecutionStep]] = {}
     for stage in STAGE_ORDER:
         stage_modules = [
             module
@@ -52,7 +56,7 @@ def artifact_ordering(artifact_schemas: Sequence[ArtifactSchema]) -> Sequence[Ar
     return tuple(sorted(artifact_schemas, key=lambda schema: schema.artifact_name))
 
 
-def _validate_stage_dependencies(modules: Dict[str, AnalysisModule]) -> None:
+def _validate_stage_dependencies(modules: dict[str, AnalysisModule]) -> None:
     kind_precedence = {kind: index for index, kind in enumerate(STAGE_ORDER)}
     for module in modules.values():
         module_stage = kind_precedence[module.definition.module_kind]
@@ -63,25 +67,28 @@ def _validate_stage_dependencies(modules: Dict[str, AnalysisModule]) -> None:
             dep_stage = kind_precedence[dep_module.definition.module_kind]
             if dep_stage > module_stage:
                 raise ValueError(
-                    f"invalid dependency ordering: {module.definition.module_id} depends on later stage "
+                    "invalid dependency ordering: "
+                    f"{module.definition.module_id} depends on later stage "
                     f"{dep_module.definition.module_id}"
                 )
 
 
-def _order_stage(stage_modules: Sequence[AnalysisModule]) -> List[ModuleDefinition]:
+def _order_stage(stage_modules: Sequence[AnalysisModule]) -> list[ModuleDefinition]:
     definitions = {module.definition.module_id: module.definition for module in stage_modules}
-    dependencies: Dict[str, set[str]] = {
-        module_id: set(dep.module_id for dep in definition.dependencies if dep.module_id in definitions)
+    dependencies: dict[str, set[str]] = {
+        module_id: set(
+            dep.module_id for dep in definition.dependencies if dep.module_id in definitions
+        )
         for module_id, definition in definitions.items()
     }
-    indegree: Dict[str, int] = {module_id: len(deps) for module_id, deps in dependencies.items()}
-    dependents: Dict[str, set[str]] = {module_id: set() for module_id in definitions}
+    indegree: dict[str, int] = {module_id: len(deps) for module_id, deps in dependencies.items()}
+    dependents: dict[str, set[str]] = {module_id: set() for module_id in definitions}
     for module_id, deps in dependencies.items():
         for dep in deps:
             dependents[dep].add(module_id)
 
     queue = sorted([module_id for module_id, degree in indegree.items() if degree == 0])
-    ordered: List[ModuleDefinition] = []
+    ordered: list[ModuleDefinition] = []
     while queue:
         current = queue.pop(0)
         ordered.append(definitions[current])

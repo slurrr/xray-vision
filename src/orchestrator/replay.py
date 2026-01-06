@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Callable, Iterable, List
 
-from orchestrator.contracts import EngineRunRecord, OrchestratorEvent
+from orchestrator.buffer import RawInputBuffer
+from orchestrator.contracts import ENGINE_MODE_HYSTERESIS, EngineRunRecord, OrchestratorEvent
+from orchestrator.cuts import Cut
 from orchestrator.publisher import (
     build_engine_run_completed,
     build_engine_run_failed,
@@ -12,19 +14,15 @@ from orchestrator.publisher import (
 )
 from orchestrator.sequencing import SymbolSequencer
 from orchestrator.snapshots import build_snapshot, select_snapshot_event
-from orchestrator.cuts import Cut
-from orchestrator.buffer import RawInputBuffer
-from orchestrator.contracts import ENGINE_MODE_HYSTERESIS
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.hysteresis.decision import HysteresisDecision
-
 
 EngineCallable = Callable[[object], object]
 
 
 @dataclass
 class ReplayResult:
-    events: List[OrchestratorEvent]
+    events: list[OrchestratorEvent]
 
 
 def replay_events(
@@ -34,7 +32,7 @@ def replay_events(
     engine_runner: EngineCallable,
 ) -> ReplayResult:
     sequencer = SymbolSequencer()
-    events: List[OrchestratorEvent] = []
+    events: list[OrchestratorEvent] = []
 
     for record in run_records:
         start_event = build_engine_run_started(
@@ -133,7 +131,7 @@ def replay_events(
 
 
 def _publish(
-    sequencer: SymbolSequencer, events: List[OrchestratorEvent], event: OrchestratorEvent
+    sequencer: SymbolSequencer, events: list[OrchestratorEvent], event: OrchestratorEvent
 ) -> None:
     sequencer.ensure_next(symbol=event.symbol, engine_timestamp_ms=event.engine_timestamp_ms)
     events.append(event)

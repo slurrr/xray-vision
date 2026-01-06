@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import List
-
-from orchestrator.contracts import OrchestratorEvent
+from orchestrator.contracts import EngineMode, OrchestratorEvent
 
 from .assembly import RunAssembler
 from .config import StateGateConfig
@@ -11,11 +9,12 @@ from .contracts import (
     REASON_CODE_INTERNAL_FAILURE,
     SCHEMA_NAME,
     SCHEMA_VERSION,
+    STATE_STATUS_HALTED,
+    InputEventType,
     StateGateEvent,
     StateGateHaltedPayload,
     StateGateSnapshot,
     StateGateStateRecord,
-    STATE_STATUS_HALTED,
 )
 from .evaluation import GateEvaluator
 from .observability import HealthStatus, NullLogger, NullMetrics, Observability
@@ -38,14 +37,18 @@ class StateGateProcessor:
             latest_engine_timestamp_ms=self._store.latest_engine_timestamps(),
         )
         self._evaluator = GateEvaluator(config=config)
-        self._state_machine = StateGateStateMachine(config=config, snapshots=self._store.snapshots())
-        self._observability = observability or Observability(logger=NullLogger(), metrics=NullMetrics())
+        self._state_machine = StateGateStateMachine(
+            config=config, snapshots=self._store.snapshots()
+        )
+        self._observability = observability or Observability(
+            logger=NullLogger(), metrics=NullMetrics()
+        )
         self._halted = False
         self._input_healthy = True
         self._persistence_healthy = True
         self._publish_healthy = True
 
-    def consume(self, event: OrchestratorEvent) -> List[StateGateEvent]:
+    def consume(self, event: OrchestratorEvent) -> list[StateGateEvent]:
         if self._halted:
             return []
         assembled = self._assembler.ingest(event)
@@ -66,31 +69,31 @@ class StateGateProcessor:
                 persist=True,
             )
             return [halt_event]
-        for event in events:
+        for state_event in events:
             try:
-                self._store.append_event(event)
+                self._store.append_event(state_event)
             except Exception as exc:  # pragma: no cover - defensive guard
                 self._persistence_healthy = False
                 halt_event = self._enter_halted(
-                    symbol=event.symbol,
-                    run_id=event.run_id,
-                    engine_timestamp_ms=event.engine_timestamp_ms,
-                    input_event_type=event.input_event_type,
-                    engine_mode=event.engine_mode,
+                    symbol=state_event.symbol,
+                    run_id=state_event.run_id,
+                    engine_timestamp_ms=state_event.engine_timestamp_ms,
+                    input_event_type=state_event.input_event_type,
+                    engine_mode=state_event.engine_mode,
                     error_kind="persistence_failure",
                     error_detail=str(exc),
                     persist=False,
                 )
                 return [halt_event]
-            processing_lag = _processing_lag_ms(event, previous_snapshot)
-            self._observability.log_event(event)
-            self._observability.record_metrics(event, processing_lag_ms=processing_lag)
+            processing_lag = _processing_lag_ms(state_event, previous_snapshot)
+            self._observability.log_event(state_event)
+            self._observability.record_metrics(state_event, processing_lag_ms=processing_lag)
         return events
 
     def snapshot_for(self, symbol: str) -> StateGateSnapshot:
         return self._store.snapshot_for(symbol)
 
-    def records(self) -> List[StateGateStateRecord]:
+    def records(self) -> list[StateGateStateRecord]:
         return list(self._store.records())
 
     def state_store(self) -> StateGateStateStore:
@@ -122,8 +125,8 @@ class StateGateProcessor:
         symbol: str,
         run_id: str,
         engine_timestamp_ms: int,
-        input_event_type: str | None,
-        engine_mode: str | None,
+        input_event_type: InputEventType | None,
+        engine_mode: EngineMode | None,
         error_kind: str,
         error_detail: str,
         persist: bool,

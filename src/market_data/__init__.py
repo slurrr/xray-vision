@@ -6,9 +6,6 @@ from market_data.adapter import (
     AdapterSupervisor,
     StreamKey,
 )
-from market_data.decoder import decode_and_ingest
-from market_data.observability import NullLogger, NullMetrics, Observability, StdlibLogger
-from market_data.serialization import deserialize_event, serialize_event
 from market_data.config import (
     BackpressureConfig,
     MarketDataConfig,
@@ -25,8 +22,11 @@ from market_data.contracts import (
     EventType,
     RawMarketEvent,
 )
-from market_data.sink import BackpressureError, RawEventSink
+from market_data.decoder import decode_and_ingest
+from market_data.observability import NullLogger, NullMetrics, Observability, StdlibLogger
 from market_data.pipeline import IngestionPipeline
+from market_data.serialization import deserialize_event, serialize_event
+from market_data.sink import BackpressureError, RawEventSink
 
 __all__ = [
     "BackpressureConfig",

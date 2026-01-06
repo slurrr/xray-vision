@@ -90,7 +90,12 @@ def regime_runs(records: list[LogRecord], *, key: str) -> list[RegimeRun]:
 
 def flip_frequency(records: list[LogRecord], *, key: str) -> FlipFrequency:
     if len(records) < 2:
-        return FlipFrequency(flips=0, updates=len(records), flip_rate_per_update=0.0, flip_rate_per_hour=None)
+        return FlipFrequency(
+            flips=0,
+            updates=len(records),
+            flip_rate_per_update=0.0,
+            flip_rate_per_hour=None,
+        )
 
     flips = 0
     last_regime = _get_regime(records[0], key=key)
@@ -119,7 +124,7 @@ def time_in_regime(records: list[LogRecord], *, key: str) -> dict[str, int]:
     if len(records) < 2:
         return {}
     totals: dict[str, int] = defaultdict(int)
-    for prev, current in zip(records, records[1:]):
+    for prev, current in zip(records, records[1:], strict=False):
         regime = _get_regime(prev, key=key)
         delta = current.timestamp - prev.timestamp
         totals[regime] += delta

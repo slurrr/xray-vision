@@ -3,7 +3,6 @@ from __future__ import annotations
 from regime_engine.contracts.snapshots import RegimeInputSnapshot
 from regime_engine.snapshot_builder.feeds.base import SnapshotFeed
 
-
 ALIGNMENT_MS = 180_000
 
 

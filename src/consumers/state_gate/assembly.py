@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Dict, Iterable, Mapping, Sequence, Set
+from typing import cast
 
 from orchestrator.contracts import (
     ENGINE_MODE_HYSTERESIS,
@@ -14,7 +15,7 @@ from orchestrator.contracts import (
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.hysteresis.decision import HysteresisDecision
 
-from .contracts import InputEventType, INPUT_EVENT_TYPES
+from .contracts import INPUT_EVENT_TYPES, InputEventType
 
 
 @dataclass(frozen=True)
@@ -35,9 +36,9 @@ class RunAssembler:
         processed_run_ids: Iterable[str] | None = None,
         latest_engine_timestamp_ms: Mapping[str, int] | None = None,
     ) -> None:
-        self._assemblies: Dict[str, _RunAssembly] = {}
-        self._processed_run_ids: Set[str] = set(processed_run_ids or ())
-        self._latest_engine_timestamp_ms: Dict[str, int] = dict(latest_engine_timestamp_ms or {})
+        self._assemblies: dict[str, _RunAssembly] = {}
+        self._processed_run_ids: set[str] = set(processed_run_ids or ())
+        self._latest_engine_timestamp_ms: dict[str, int] = dict(latest_engine_timestamp_ms or {})
 
     def ingest(self, event: OrchestratorEvent) -> AssembledRunInput | None:
         if event.event_type not in INPUT_EVENT_TYPES:
@@ -55,7 +56,7 @@ class RunAssembler:
             assembly = _RunAssembly(
                 symbol=event.symbol,
                 engine_timestamp_ms=event.engine_timestamp_ms,
-                engine_mode=event.engine_mode,
+                engine_mode=cast(EngineMode | None, event.engine_mode),
             )
             self._assemblies[event.run_id] = assembly
         else:
@@ -74,10 +75,14 @@ class RunAssembler:
             run_id=event.run_id,
             symbol=assembly.symbol,
             engine_timestamp_ms=assembly.engine_timestamp_ms,
-            engine_mode=assembly.engine_mode,
+            engine_mode=cast(EngineMode | None, assembly.engine_mode),
             input_event_type=ready_event,
-            regime_output=assembly.regime_output if ready_event == "EngineRunCompleted" else None,
-            hysteresis_decision=assembly.hysteresis_decision if ready_event == "HysteresisDecisionPublished" else None,
+            regime_output=assembly.regime_output
+            if ready_event == "EngineRunCompleted"
+            else None,
+            hysteresis_decision=assembly.hysteresis_decision
+            if ready_event == "HysteresisDecisionPublished"
+            else None,
         )
         self._processed_run_ids.add(event.run_id)
         self._assemblies.pop(event.run_id, None)
@@ -108,10 +113,13 @@ class _RunAssembly:
 
     def ensure_consistent(self, *, symbol: str, engine_timestamp_ms: int) -> None:
         if symbol != self.symbol:
-            raise ValueError(f"inconsistent symbol for run_id: expected {self.symbol}, got {symbol}")
+            raise ValueError(
+                f"inconsistent symbol for run_id: expected {self.symbol}, got {symbol}"
+            )
         if engine_timestamp_ms != self.engine_timestamp_ms:
             raise ValueError(
-                f"inconsistent engine_timestamp_ms for run_id: expected {self.engine_timestamp_ms}, got {engine_timestamp_ms}"
+                f"inconsistent engine_timestamp_ms for run_id: expected "
+                f"{self.engine_timestamp_ms}, got {engine_timestamp_ms}"
             )
 
     def update_engine_mode(self, engine_mode: EngineMode | None) -> None:
@@ -122,7 +130,8 @@ class _RunAssembly:
             return None
         if self.engine_mode != engine_mode:
             raise ValueError(
-                f"inconsistent engine_mode for run_id: expected {self.engine_mode}, got {engine_mode}"
+                f"inconsistent engine_mode for run_id: expected {self.engine_mode}, got "
+                f"{engine_mode}"
             )
 
     def apply_event(self, event: OrchestratorEvent) -> None:
@@ -134,13 +143,17 @@ class _RunAssembly:
                 raise ValueError("EngineRunCompleted payload must be EngineRunCompletedPayload")
         elif event.event_type == "EngineRunFailed":
             if payload is not None and not isinstance(payload, EngineRunFailedPayload):
-                raise ValueError("EngineRunFailed payload must be EngineRunFailedPayload or None")
+                raise ValueError(
+                    "EngineRunFailed payload must be EngineRunFailedPayload or None"
+                )
             self.failed = True
         elif event.event_type == "HysteresisDecisionPublished":
             if isinstance(payload, HysteresisDecisionPayload):
                 self.hysteresis_decision = payload.hysteresis_decision
             else:
-                raise ValueError("HysteresisDecisionPublished payload must be HysteresisDecisionPayload")
+                raise ValueError(
+                    "HysteresisDecisionPublished payload must be HysteresisDecisionPayload"
+                )
 
     def ready_event_type(self) -> InputEventType | None:
         if self.hysteresis_decision is not None:

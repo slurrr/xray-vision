@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import fields, is_dataclass, dataclass
-from typing import Any, Optional
+from dataclasses import dataclass, fields, is_dataclass
+from typing import Any
 
 
 class _Missing:
@@ -78,7 +78,7 @@ class DerivativesSnapshot:
     funding_rate: float
     funding_slope: float
     funding_z: float
-    liquidation_intensity: Optional[float]
+    liquidation_intensity: float | None
 
 
 @dataclass(frozen=True)
@@ -94,8 +94,8 @@ class ContextSnapshot:
     rs_vs_btc: float
     beta_to_btc: float
     alt_breadth: float
-    btc_regime: Optional[str]
-    eth_regime: Optional[str]
+    btc_regime: str | None
+    eth_regime: str | None
 
 
 @dataclass(frozen=True)

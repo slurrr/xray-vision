@@ -6,7 +6,6 @@ from consumers.analysis_engine import (
     AnalysisRunStatusPayload,
     IdempotencyStore,
     ModuleRegistry,
-    ModuleStateStore,
 )
 from consumers.state_gate.contracts import (
     EVENT_TYPE_GATE_EVALUATED,
@@ -48,7 +47,8 @@ class TestEngineShell(unittest.TestCase):
             config=AnalysisEngineConfig(enabled_modules=[], module_configs=[]),
         )
         outputs = engine.consume(_gate_event())
-        self.assertEqual([event.event_type for event in outputs], ["AnalysisRunStarted", "AnalysisRunCompleted"])
+        event_types = [event.event_type for event in outputs]
+        self.assertEqual(event_types, ["AnalysisRunStarted", "AnalysisRunCompleted"])
         completed = outputs[-1]
         assert isinstance(completed.payload, AnalysisRunStatusPayload)
         self.assertEqual(completed.payload.status, "SUCCESS")

@@ -1,7 +1,6 @@
 import unittest
 
 from market_data.contracts import RawMarketEvent
-from orchestrator.contracts import EngineRunRecord, OrchestratorEvent, SCHEMA_NAME, SCHEMA_VERSION
 from orchestrator.failure_handling import BackpressureState
 from orchestrator.lifecycle import Lifecycle, OrchestratorState
 from orchestrator.observability import Observability, compute_health

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Sequence, Set
 
 from .contracts import ArtifactSchema, ModuleDefinition, ModuleDependency
 from .modules import AnalysisModule
@@ -9,7 +9,7 @@ from .modules import AnalysisModule
 
 @dataclass
 class ModuleRegistry:
-    modules: Dict[str, AnalysisModule]
+    modules: dict[str, AnalysisModule]
 
     def __init__(self, modules: Iterable[AnalysisModule]) -> None:
         self.modules = {}
@@ -23,9 +23,15 @@ class ModuleRegistry:
     def definitions(self) -> Sequence[ModuleDefinition]:
         return tuple(module.definition for module in self.modules.values())
 
-    def enabled_definitions(self, enabled_module_ids: Sequence[str] | None = None) -> Sequence[ModuleDefinition]:
+    def enabled_definitions(
+        self, enabled_module_ids: Sequence[str] | None = None
+    ) -> Sequence[ModuleDefinition]:
         if enabled_module_ids is None:
-            enabled = [module_id for module_id, module in self.modules.items() if module.definition.enabled_by_default]
+            enabled = [
+                module_id
+                for module_id, module in self.modules.items()
+                if module.definition.enabled_by_default
+            ]
         else:
             enabled = list(enabled_module_ids)
         return tuple(self.modules[module_id].definition for module_id in sorted(enabled))
@@ -35,7 +41,7 @@ class ModuleRegistry:
         self._validate_missing_dependencies(enabled_set)
         self._validate_cycles(enabled_set)
 
-    def _validate_missing_dependencies(self, enabled_set: Set[str]) -> None:
+    def _validate_missing_dependencies(self, enabled_set: set[str]) -> None:
         for module_id in enabled_set:
             module = self.modules.get(module_id)
             if module is None:
@@ -43,12 +49,13 @@ class ModuleRegistry:
             for dependency in module.definition.dependencies:
                 if dependency.module_id not in enabled_set:
                     raise ValueError(
-                        f"missing dependency for {module_id}: {dependency.module_id}.{dependency.artifact_name}"
+                        f"missing dependency for {module_id}: "
+                        f"{dependency.module_id}.{dependency.artifact_name}"
                     )
 
-    def _validate_cycles(self, enabled_set: Set[str]) -> None:
-        visiting: Set[str] = set()
-        visited: Set[str] = set()
+    def _validate_cycles(self, enabled_set: set[str]) -> None:
+        visiting: set[str] = set()
+        visited: set[str] = set()
 
         def dfs(current: str) -> None:
             if current in visited:

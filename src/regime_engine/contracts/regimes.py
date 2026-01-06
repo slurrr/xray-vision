@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List
 
 
 class Regime(Enum):
@@ -21,4 +20,4 @@ class Regime(Enum):
 class RegimeScore:
     regime: Regime
     score: float
-    contributors: List[str]
+    contributors: list[str]

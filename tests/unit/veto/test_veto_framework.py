@@ -68,12 +68,16 @@ class TestVetoFramework(unittest.TestCase):
         snapshot = _make_snapshot()
         scores = _make_scores()
 
-        def rule_one(_snapshot: RegimeInputSnapshot, _scores: list[RegimeScore]) -> list[VetoResult]:
+        def rule_one(
+            _snapshot: RegimeInputSnapshot, _scores: list[RegimeScore]
+        ) -> list[VetoResult]:
             return [
                 VetoResult(regime=Regime.CHOP_BALANCED, vetoed=True, reasons=["rule_one"])
             ]
 
-        def rule_two(_snapshot: RegimeInputSnapshot, _scores: list[RegimeScore]) -> list[VetoResult]:
+        def rule_two(
+            _snapshot: RegimeInputSnapshot, _scores: list[RegimeScore]
+        ) -> list[VetoResult]:
             return [VetoResult(regime=Regime.SQUEEZE_UP, vetoed=False, reasons=["rule_two"])]
 
         original_registry = veto_rules.rule_registry
@@ -83,7 +87,10 @@ class TestVetoFramework(unittest.TestCase):
         finally:
             veto_rules.rule_registry = original_registry
 
-        self.assertEqual([v.regime for v in vetoed.vetoes], [Regime.CHOP_BALANCED, Regime.SQUEEZE_UP])
+        self.assertEqual(
+            [v.regime for v in vetoed.vetoes],
+            [Regime.CHOP_BALANCED, Regime.SQUEEZE_UP],
+        )
         self.assertEqual([v.reasons for v in vetoed.vetoes], [["rule_one"], ["rule_two"]])
         self.assertEqual(vetoed.scores, scores.scores)
 

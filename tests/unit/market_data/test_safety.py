@@ -3,7 +3,12 @@ from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 from market_data.config import BackpressureConfig
-from market_data.contracts import EVENT_TYPE_REQUIRED_NORMALIZED_KEYS, EVENT_TYPES, SCHEMA_NAME, SCHEMA_VERSION
+from market_data.contracts import (
+    EVENT_TYPE_REQUIRED_NORMALIZED_KEYS,
+    EVENT_TYPES,
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
+)
 from market_data.decoder import decode_and_ingest
 from market_data.observability import NullLogger, NullMetrics, Observability
 from market_data.pipeline import IngestionPipeline

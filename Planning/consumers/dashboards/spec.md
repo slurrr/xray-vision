@@ -179,7 +179,19 @@ Renderers output presentation only (TUI in v1; browser/web UI in future). Render
       - `invalidations`: array of strings
       - `permissions`: array of strings
       - `source`: string (`truth` | `hysteresis`)
-  - `analysis`:
+  - `analysis`: (render-only; optional depth expansion):
+    - Intent:
+      - Provide human-readable summaries and references to analysis artifacts produced upstream.
+      - Support renderer expansion/collapse for per-symbol inspection.
+      - Enable situational awareness without encoding decisions or rankings.
+    - Source:
+      - Derived exclusively from `analysis_engine_event` payloads.
+      - Dashboards must not synthesize or infer analytical conclusions.
+    - Guardrails:
+      - `analysis` must not introduce new signals, scores, thresholds, or opinions.
+      - `analysis` must not restate or reinterpret regime or gating decisions.
+      - `analysis.highlights` are summaries, not rankings or recommendations.
+      - Absence of analysis data must be handled gracefully (`status = EMPTY`).
     - `status`: string (`EMPTY` | `PARTIAL` | `PRESENT`)
     - `highlights`: array of strings (stable, best-effort summaries; deterministic ordering rule defined below)
     - `artifacts`: array of artifact summaries (optional; may be truncated):
@@ -189,6 +201,38 @@ Renderers output presentation only (TUI in v1; browser/web UI in future). Render
       - `artifact_schema`: string
       - `artifact_schema_version`: string
       - `summary`: string (render-safe text; no sensitive data)
+  - `metrics` (optional; render-agnostic comparison metrics):
+    - Intent:
+      - Provide flat, numeric, deterministic observables to support renderer-side
+        sorting, grouping, and visual comparison.
+      - Metrics exist solely to aid human attention allocation and carry no
+        interpretation, thresholds, or trade intent.
+    - Source:
+      - Derived exclusively from `analysis_engine_event` payloads.
+      - Dashboards must not compute, infer, or mutate metrics.
+    - Population rules:
+      - All fields are optional and may be omitted or null.
+      - Metrics must be deterministic and derived solely from upstream inputs
+        explicitly allowed by this spec.
+      - Metrics must not encode labels, buckets, rankings beyond numeric rank,
+        or trade logic.
+    - Fields:
+      - `atr_pct`: number | null
+        - Definition: Average True Range expressed as a percentage of price.
+      - `atr_rank`: number | null
+        - Definition: Rank of the symbol’s ATR within the current symbol universe, where `1` represents the **most volatile** symbol and larger values represent progressively lower volatility.
+      - `range_24h_pct`: number | null
+        - Definition: High–low price range over the trailing 24h window, expressed as a percentage of price.
+      - `range_session_pct`: number | null
+        - Definition: High–low price range over the current trading session, expressed as a percentage of price.
+      - `volume_24h`: number | null
+        - Definition: Total traded volume over the trailing 24h window.
+      - `volume_rank`: number | null
+        - Definition: Rank of the symbol’s 24h volume within the current symbol universe (ordering convention is renderer-defined).
+      - `relative_volume`: number | null
+        - Definition: Ratio of current volume to a typical or baseline volume (exact baseline definition is builder-specific but must be deterministic).
+      - `relative_strength`: number | null
+        - Definition: Relative performance metric versus a reference universe or benchmark, expressed as a scalar suitable for cross-symbol comparison.
 
 **3) Health & Telemetry**
 

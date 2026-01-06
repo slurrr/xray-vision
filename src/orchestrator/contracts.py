@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Mapping, Sequence
+from typing import Literal
 
 from market_data.contracts import RawMarketEvent
 from regime_engine.contracts.outputs import RegimeOutput

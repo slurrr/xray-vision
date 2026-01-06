@@ -1,9 +1,16 @@
 import unittest
+from collections.abc import Mapping
+from typing import cast
 
 from consumers.state_gate import StateGateProcessor
 from consumers.state_gate.config import OperationLimits, StateGateConfig
 from consumers.state_gate.observability import HealthStatus, Observability
-from orchestrator.contracts import EngineRunCompletedPayload, OrchestratorEvent, SCHEMA_NAME, SCHEMA_VERSION
+from orchestrator.contracts import (
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
+    EngineRunCompletedPayload,
+    OrchestratorEvent,
+)
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
 
@@ -12,22 +19,28 @@ class FakeLogger:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-    def log(self, level: int, message: str, fields: dict[str, object]) -> None:
+    def log(self, level: int, message: str, fields: Mapping[str, object]) -> None:
         self.calls.append({"level": level, "message": message, "fields": dict(fields)})
 
 
 class FakeMetrics:
     def __init__(self) -> None:
-        self.increments: list[tuple[str, int, dict[str, str] | None]] = []
-        self.observations: list[tuple[str, float, dict[str, str] | None]] = []
+        self.increments: list[tuple[str, int, Mapping[str, str] | None]] = []
+        self.observations: list[tuple[str, float, Mapping[str, str] | None]] = []
 
-    def increment(self, name: str, value: int = 1, tags: dict[str, str] | None = None) -> None:
+    def increment(
+        self, name: str, value: int = 1, tags: Mapping[str, str] | None = None
+    ) -> None:
         self.increments.append((name, value, tags))
 
-    def observe(self, name: str, value: float, tags: dict[str, str] | None = None) -> None:
+    def observe(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:
         self.observations.append((name, value, tags))
 
-    def gauge(self, name: str, value: float, tags: dict[str, str] | None = None) -> None:
+    def gauge(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:
         return None
 
 
@@ -67,7 +80,9 @@ def _completed_event(run_id: str, *, symbol: str, engine_timestamp_ms: int) -> O
         cut_end_ingest_seq=1,
         cut_kind="timer",
         engine_mode="truth",
-        payload=EngineRunCompletedPayload(regime_output=_regime_output(symbol, engine_timestamp_ms)),
+        payload=EngineRunCompletedPayload(
+            regime_output=_regime_output(symbol, engine_timestamp_ms)
+        ),
     )
 
 
@@ -82,7 +97,7 @@ class TestObservability(unittest.TestCase):
         processor.consume(_completed_event("run-1", symbol="TEST", engine_timestamp_ms=100))
 
         self.assertEqual(len(logger.calls), 1)
-        fields = logger.calls[0]["fields"]
+        fields = cast(dict[str, object], logger.calls[0]["fields"])
         self.assertEqual(fields["symbol"], "TEST")
         self.assertEqual(fields["run_id"], "run-1")
         self.assertEqual(fields["input_event_type"], "EngineRunCompleted")
@@ -100,12 +115,18 @@ class TestObservability(unittest.TestCase):
         processor.consume(_completed_event("run-2", symbol="TEST", engine_timestamp_ms=100))
         processor.consume(_completed_event("run-3", symbol="TEST", engine_timestamp_ms=105))
 
-        gate_decisions = [entry for entry in metrics.increments if entry[0] == "state_gate.gate_decisions"]
+        gate_decisions = [
+            entry for entry in metrics.increments if entry[0] == "state_gate.gate_decisions"
+        ]
         self.assertGreaterEqual(len(gate_decisions), 2)
-        reset_metrics = [entry for entry in metrics.increments if entry[0] == "state_gate.resets"]
+        reset_metrics = [
+            entry for entry in metrics.increments if entry[0] == "state_gate.resets"
+        ]
         self.assertEqual(len(reset_metrics), 1)
         self.assertEqual(reset_metrics[0][2], {"reset_reason": "reset_timestamp_gap"})
-        processing_lag = [obs for obs in metrics.observations if obs[0] == "state_gate.processing_lag_ms"]
+        processing_lag = [
+            obs for obs in metrics.observations if obs[0] == "state_gate.processing_lag_ms"
+        ]
         self.assertEqual(len(processing_lag), 1)
         self.assertEqual(processing_lag[0][1], 5.0)
 

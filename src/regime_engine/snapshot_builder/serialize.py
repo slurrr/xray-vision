@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any
 
 from regime_engine.contracts.snapshots import (
     MISSING,
@@ -14,7 +15,6 @@ from regime_engine.contracts.snapshots import (
     RegimeInputSnapshot,
     is_missing,
 )
-
 
 _MISSING_MARKER_KEY = "__xray_missing__"
 _MISSING_MARKER_OBJ: dict[str, bool] = {_MISSING_MARKER_KEY: True}
@@ -37,7 +37,9 @@ def _encode(obj: object) -> object:
         encoded: dict[str, object] = {}
         for k, v in obj.items():
             if not isinstance(k, str):
-                raise TypeError(f"JSON serialization requires string dict keys; got {type(k).__name__}")
+                raise TypeError(
+                    f"JSON serialization requires string dict keys; got {type(k).__name__}"
+                )
             encoded[k] = _encode(v)
         return encoded
 
@@ -99,4 +101,3 @@ def loads_snapshot_jsonl(line: str) -> RegimeInputSnapshot:
     if not isinstance(obj, dict):
         raise TypeError("expected a JSON object per line")
     return snapshot_from_json_obj(obj)
-

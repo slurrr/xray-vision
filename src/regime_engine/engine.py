@@ -9,7 +9,12 @@ from __future__ import annotations
 
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.snapshots import RegimeInputSnapshot
-from regime_engine.hysteresis import HysteresisConfig, HysteresisDecision, HysteresisStore, process_output
+from regime_engine.hysteresis import (
+    HysteresisConfig,
+    HysteresisDecision,
+    HysteresisStore,
+    process_output,
+)
 from regime_engine.pipeline import run_pipeline
 
 

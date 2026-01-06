@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Iterable
 
 from orchestrator.config import RetryPolicy
 
@@ -14,7 +14,7 @@ class RetrySchedule:
     max_elapsed_ms: int | None = None
 
     @classmethod
-    def from_policy(cls, policy: RetryPolicy) -> "RetrySchedule":
+    def from_policy(cls, policy: RetryPolicy) -> RetrySchedule:
         return cls(
             min_delay_ms=policy.min_delay_ms,
             max_delay_ms=policy.max_delay_ms,
@@ -40,7 +40,9 @@ class Retrier:
     schedule: RetrySchedule
     sleeper: Callable[[int], None]
 
-    def __init__(self, schedule: RetrySchedule, sleeper: Callable[[int], None] | None = None) -> None:
+    def __init__(
+        self, schedule: RetrySchedule, sleeper: Callable[[int], None] | None = None
+    ) -> None:
         self.schedule = schedule
         self.sleeper = sleeper or (lambda _: None)
 

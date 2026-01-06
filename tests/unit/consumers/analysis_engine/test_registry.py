@@ -4,8 +4,8 @@ from consumers.analysis_engine import (
     ArtifactEmittedPayload,
     ArtifactSchema,
     ModuleDependency,
-    ModuleResult,
     ModuleRegistry,
+    ModuleResult,
     SignalModule,
     build_module_definition,
 )
@@ -55,7 +55,10 @@ class TestModuleRegistry(unittest.TestCase):
         self.assertEqual([d.module_id for d in definitions], ["a", "b"])
 
     def test_missing_dependency_fails_validation(self) -> None:
-        dependent = _StubSignal("dep", dependencies=[ModuleDependency(module_id="missing", artifact_name="value")])
+        dependent = _StubSignal(
+            "dep",
+            dependencies=[ModuleDependency(module_id="missing", artifact_name="value")],
+        )
         registry = ModuleRegistry([dependent])
         with self.assertRaises(ValueError):
             registry.validate_dependencies(["dep"])

@@ -10,7 +10,8 @@ from regime_engine.hysteresis.decision import HysteresisDecision
 
 
 def log_path(*, base_dir: str, timestamp: int) -> str:
-    date_str = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+    dt = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
+    date_str = dt.strftime("%Y-%m-%d")
     return os.path.join(base_dir, f"{date_str}.jsonl")
 
 

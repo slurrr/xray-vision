@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 
 from regime_engine.contracts.snapshots import MISSING, DerivativesSnapshot
 from regime_engine.features.derivatives import (
@@ -11,8 +12,8 @@ from regime_engine.features.derivatives import (
 )
 
 
-def _make_snapshot(**overrides: object) -> DerivativesSnapshot:
-    data = dict(
+def _make_snapshot(**overrides: Any) -> DerivativesSnapshot:
+    data: dict[str, Any] = dict(
         open_interest=1.0,
         oi_slope_short=2.0,
         oi_slope_med=3.0,
@@ -23,7 +24,7 @@ def _make_snapshot(**overrides: object) -> DerivativesSnapshot:
         liquidation_intensity=None,
     )
     data.update(overrides)
-    return DerivativesSnapshot(**data)
+    return DerivativesSnapshot(**cast(dict[str, Any], data))
 
 
 class TestDerivativesFeatures(unittest.TestCase):

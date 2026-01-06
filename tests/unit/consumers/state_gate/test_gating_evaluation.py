@@ -4,10 +4,15 @@ from consumers.state_gate import GateEvaluator, StateGateConfig, StateGateProces
 from consumers.state_gate.assembly import AssembledRunInput
 from consumers.state_gate.config import OperationLimits
 from orchestrator.contracts import (
+    SCHEMA_NAME as ORCHESTRATOR_SCHEMA,
+)
+from orchestrator.contracts import (
+    SCHEMA_VERSION as ORCHESTRATOR_SCHEMA_VERSION,
+)
+from orchestrator.contracts import (
+    EngineMode,
     EngineRunCompletedPayload,
     OrchestratorEvent,
-    SCHEMA_NAME as ORCHESTRATOR_SCHEMA,
-    SCHEMA_VERSION as ORCHESTRATOR_SCHEMA_VERSION,
 )
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
@@ -26,7 +31,9 @@ def _config(**overrides) -> StateGateConfig:
     )
 
 
-def _regime_output(symbol: str, timestamp: int, invalidations: list[str] | None = None) -> RegimeOutput:
+def _regime_output(
+    symbol: str, timestamp: int, invalidations: list[str] | None = None
+) -> RegimeOutput:
     return RegimeOutput(
         symbol=symbol,
         timestamp=timestamp,
@@ -64,7 +71,7 @@ def _assembled_run(
     symbol: str,
     engine_timestamp_ms: int,
     input_event_type: str,
-    engine_mode: str | None,
+    engine_mode: EngineMode | None,
     regime_output: RegimeOutput | None = None,
     hysteresis_decision: HysteresisDecision | None = None,
 ) -> AssembledRunInput:
@@ -91,7 +98,9 @@ def _completed_event(run_id: str, *, symbol: str, engine_timestamp_ms: int) -> O
         cut_end_ingest_seq=1,
         cut_kind="timer",
         engine_mode="truth",
-        payload=EngineRunCompletedPayload(regime_output=_regime_output(symbol, engine_timestamp_ms)),
+        payload=EngineRunCompletedPayload(
+            regime_output=_regime_output(symbol, engine_timestamp_ms)
+        ),
     )
 
 

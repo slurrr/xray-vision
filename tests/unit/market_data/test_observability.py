@@ -1,7 +1,7 @@
 import unittest
 
 from market_data.adapter import StreamKey
-from market_data.contracts import RawMarketEvent, SCHEMA_NAME, SCHEMA_VERSION
+from market_data.contracts import SCHEMA_NAME, SCHEMA_VERSION, RawMarketEvent
 from market_data.observability import Observability
 
 

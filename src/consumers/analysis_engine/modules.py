@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Mapping, Protocol, Sequence
+from typing import Protocol
 
 from .contracts import ArtifactEmittedPayload, ModuleDefinition, ModuleKind, RunContext
 
@@ -19,7 +20,7 @@ class AnalysisModule(Protocol):
         context: RunContext,
         dependencies: Mapping[str, ArtifactEmittedPayload],
         state: object | None = None,
-    ) -> "ModuleResult": ...  # pragma: no cover - interface
+    ) -> ModuleResult: ...  # pragma: no cover - interface
 
 
 @dataclass(frozen=True)

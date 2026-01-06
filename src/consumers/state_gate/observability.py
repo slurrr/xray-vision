@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping, Protocol
+from typing import Protocol
 
 from .contracts import StateGateEvent, StateResetPayload
 
@@ -12,11 +13,17 @@ class StructuredLogger(Protocol):
 
 
 class MetricsRecorder(Protocol):
-    def increment(self, name: str, value: int = 1, tags: Mapping[str, str] | None = None) -> None: ...
+    def increment(
+        self, name: str, value: int = 1, tags: Mapping[str, str] | None = None
+    ) -> None: ...
 
-    def observe(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None: ...
+    def observe(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None: ...
 
-    def gauge(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None: ...
+    def gauge(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -27,13 +34,19 @@ class NullLogger:
 
 @dataclass(frozen=True)
 class NullMetrics:
-    def increment(self, name: str, value: int = 1, tags: Mapping[str, str] | None = None) -> None:
+    def increment(
+        self, name: str, value: int = 1, tags: Mapping[str, str] | None = None
+    ) -> None:
         return None
 
-    def observe(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None:
+    def observe(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:
         return None
 
-    def gauge(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None:
+    def gauge(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:
         return None
 
 
@@ -72,18 +85,32 @@ class Observability:
             fields,
         )
 
-    def record_metrics(self, event: StateGateEvent, *, processing_lag_ms: int | None = None) -> None:
+    def record_metrics(
+        self, event: StateGateEvent, *, processing_lag_ms: int | None = None
+    ) -> None:
         if event.event_type == "StateReset":
-            reset_reason = event.payload.reset_reason if isinstance(event.payload, StateResetPayload) else "unknown"
+            reset_reason = (
+                event.payload.reset_reason
+                if isinstance(event.payload, StateResetPayload)
+                else "unknown"
+            )
             self.metrics.increment("state_gate.resets", tags={"reset_reason": reset_reason})
-            self.metrics.increment("state_gate.transitions", tags={"state_status": event.state_status})
+            self.metrics.increment(
+                "state_gate.transitions", tags={"state_status": event.state_status}
+            )
             return None
 
         if event.event_type == "StateGateHalted":
-            error_kind = getattr(event.payload, "error_kind", "internal_failure") if event.payload else "internal_failure"
+            error_kind = (
+                getattr(event.payload, "error_kind", "internal_failure")
+                if event.payload
+                else "internal_failure"
+            )
             self.metrics.increment("state_gate.failures", tags={"error_kind": str(error_kind)})
             self.metrics.gauge("state_gate.halted", 1.0)
-            self.metrics.increment("state_gate.transitions", tags={"state_status": event.state_status})
+            self.metrics.increment(
+                "state_gate.transitions", tags={"state_status": event.state_status}
+            )
             return None
 
         if event.event_type != "GateEvaluated":
@@ -95,7 +122,9 @@ class Observability:
                 "state_gate.gate_decisions",
                 tags={"gate_status": event.gate_status, "reason": reason},
             )
-        self.metrics.increment("state_gate.transitions", tags={"state_status": event.state_status})
+        self.metrics.increment(
+            "state_gate.transitions", tags={"state_status": event.state_status}
+        )
         if processing_lag_ms is not None:
             self.metrics.observe(
                 "state_gate.processing_lag_ms",

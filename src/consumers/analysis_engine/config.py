@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Mapping, Sequence
 
 from .registry import ModuleRegistry
 
@@ -46,10 +46,14 @@ def _validate_module_configs(configs: Sequence[ModuleConfig], registry: ModuleRe
             raise ValueError(f"duplicate module_config for {module_config.module_id}")
         seen.add(module_config.module_id)
         if module_config.config is not None and not isinstance(module_config.config, Mapping):
-            raise ValueError(f"module_config for {module_config.module_id} must be a mapping if provided")
+            raise ValueError(
+                f"module_config for {module_config.module_id} must be a mapping if provided"
+            )
 
 
-def _validate_symbol_configs(symbol_configs: Sequence[SymbolConfig], registry: ModuleRegistry) -> None:
+def _validate_symbol_configs(
+    symbol_configs: Sequence[SymbolConfig], registry: ModuleRegistry
+) -> None:
     seen_symbols: set[str] = set()
     for symbol_config in symbol_configs:
         if symbol_config.symbol in seen_symbols:

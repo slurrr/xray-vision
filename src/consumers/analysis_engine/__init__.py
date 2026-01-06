@@ -1,3 +1,4 @@
+from .config import AnalysisEngineConfig, ModuleConfig, SymbolConfig, validate_config
 from .contracts import (
     ANALYSIS_EVENT_TYPES,
     ARTIFACT_KINDS,
@@ -12,16 +13,22 @@ from .contracts import (
     ArtifactKind,
     ArtifactSchema,
     IdempotencyKey,
-    ModuleDependency,
     ModuleDefinition,
+    ModuleDependency,
     ModuleFailedPayload,
     ModuleKind,
     RunContext,
     build_idempotency_key,
 )
-from .config import AnalysisEngineConfig, ModuleConfig, SymbolConfig, validate_config
 from .engine import AnalysisEngine
-from .modules import AnalysisModule, DetectorModule, ModuleResult, OutputModule, RuleModule, SignalModule
+from .modules import (
+    AnalysisModule,
+    DetectorModule,
+    ModuleResult,
+    OutputModule,
+    RuleModule,
+    SignalModule,
+)
 from .observability import HealthStatus, NullLogger, NullMetrics, Observability
 from .persistence import IdempotencyStore, ModuleStateStore
 from .registry import ModuleRegistry, build_module_definition

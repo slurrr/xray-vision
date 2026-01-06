@@ -12,9 +12,9 @@ from market_data.config import (
 from market_data.contracts import (
     EVENT_TYPE_REQUIRED_NORMALIZED_KEYS,
     EVENT_TYPES,
-    RawMarketEvent,
     SCHEMA_NAME,
     SCHEMA_VERSION,
+    RawMarketEvent,
 )
 
 

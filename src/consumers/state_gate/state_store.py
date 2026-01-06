@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Sequence
+from collections.abc import Iterable, Sequence
 
 from .contracts import (
     GATE_STATUS_CLOSED,
     STATE_STATUS_BOOTSTRAP,
-    StateGateEvent,
-    StateGateStateRecord,
-    StateGateSnapshot,
-    StateResetPayload,
     GateEvaluatedPayload,
+    StateGateEvent,
+    StateGateSnapshot,
+    StateGateStateRecord,
+    StateResetPayload,
 )
 
 
 class StateGateStateStore:
     def __init__(self, records: Sequence[StateGateStateRecord] | None = None) -> None:
-        self._records: List[StateGateStateRecord] = list(records or [])
-        self._snapshots: Dict[str, StateGateSnapshot] = {}
+        self._records: list[StateGateStateRecord] = list(records or [])
+        self._snapshots: dict[str, StateGateSnapshot] = {}
         for record in self._records:
             self._update_snapshot(record)
 
@@ -35,14 +35,14 @@ class StateGateStateStore:
     def snapshot_for(self, symbol: str) -> StateGateSnapshot:
         return self._snapshots.get(symbol, _bootstrap_snapshot(symbol=symbol))
 
-    def snapshots(self) -> Dict[str, StateGateSnapshot]:
+    def snapshots(self) -> dict[str, StateGateSnapshot]:
         return dict(self._snapshots)
 
     def processed_run_ids(self) -> Iterable[str]:
         return (record.run_id for record in self._records)
 
-    def latest_engine_timestamps(self) -> Dict[str, int]:
-        timestamps: Dict[str, int] = {}
+    def latest_engine_timestamps(self) -> dict[str, int]:
+        timestamps: dict[str, int] = {}
         for symbol, snapshot in self._snapshots.items():
             if snapshot.last_engine_timestamp_ms is not None:
                 timestamps[symbol] = snapshot.last_engine_timestamp_ms
@@ -73,8 +73,12 @@ def _record_from_event(event: StateGateEvent) -> StateGateStateRecord:
             reasons=list(event.reasons),
             engine_mode=event.engine_mode,
             source_event_type=event.input_event_type,
-            regime_output=payload.regime_output if isinstance(payload, GateEvaluatedPayload) else None,
-            hysteresis_decision=payload.hysteresis_decision if isinstance(payload, GateEvaluatedPayload) else None,
+            regime_output=payload.regime_output
+            if isinstance(payload, GateEvaluatedPayload)
+            else None,
+            hysteresis_decision=payload.hysteresis_decision
+            if isinstance(payload, GateEvaluatedPayload)
+            else None,
         )
     if event.event_type == "StateReset":
         reset_reason = payload.reset_reason if isinstance(payload, StateResetPayload) else None

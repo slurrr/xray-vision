@@ -20,7 +20,9 @@ class TestFailureHandling(unittest.TestCase):
         retrier = Retrier(RetrySchedule(min_delay_ms=1, max_delay_ms=1, max_attempts=1))
 
         with self.assertRaises(BufferAppendFailure):
-            handler.handle_buffer_append(lambda: (_ for _ in ()).throw(RuntimeError("fail")), retrier)
+            handler.handle_buffer_append(
+                lambda: (_ for _ in ()).throw(RuntimeError("fail")), retrier
+            )
 
         self.assertEqual(lifecycle.state, OrchestratorState.DEGRADED)
         self.assertTrue(backpressure.ingestion_paused)

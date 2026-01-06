@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, List
 
 from market_data.contracts import RawMarketEvent
 from orchestrator.contracts import RawInputBufferRecord
@@ -15,7 +15,7 @@ class BufferFullError(RuntimeError):
 @dataclass
 class RawInputBuffer:
     max_records: int
-    records: List[RawInputBufferRecord]
+    records: list[RawInputBufferRecord]
     _next_seq: int = 1
 
     def __init__(self, *, max_records: int) -> None:
@@ -25,7 +25,9 @@ class RawInputBuffer:
         self.records = []
         self._next_seq = 1
 
-    def append(self, event: RawMarketEvent, *, ingest_ts_ms: int | None = None) -> RawInputBufferRecord:
+    def append(
+        self, event: RawMarketEvent, *, ingest_ts_ms: int | None = None
+    ) -> RawInputBufferRecord:
         if len(self.records) >= self.max_records:
             raise BufferFullError("input buffer capacity exceeded")
         timestamp = ingest_ts_ms if ingest_ts_ms is not None else _now_ms()
@@ -41,7 +43,7 @@ class RawInputBuffer:
     def all_records(self) -> Iterable[RawInputBufferRecord]:
         return tuple(self.records)
 
-    def range_by_seq(self, *, start_seq: int, end_seq: int) -> List[RawInputBufferRecord]:
+    def range_by_seq(self, *, start_seq: int, end_seq: int) -> list[RawInputBufferRecord]:
         if start_seq > end_seq:
             raise ValueError("start_seq must be <= end_seq")
         return [
@@ -52,7 +54,7 @@ class RawInputBuffer:
 
     def range_by_symbol(
         self, *, symbol: str, start_seq: int, end_seq: int
-    ) -> List[RawInputBufferRecord]:
+    ) -> list[RawInputBufferRecord]:
         records = self.range_by_seq(start_seq=start_seq, end_seq=end_seq)
         return [record for record in records if record.event.symbol == symbol]
 

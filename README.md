@@ -236,6 +236,61 @@ processor = StateGateProcessor(config=config)
 outputs = processor.consume(event)  # list of StateGateEvent (GateEvaluated/StateReset/StateGateHalted)
 ```
 
+## Analysis Engine
+
+The analysis_engine layer runs gated analyses over `state_gate_event` inputs and emits deterministic `analysis_engine_event` v1 artifacts.
+
+What it does:
+
+- Consumes `state_gate_event` v1 and runs only when `gate_status == OPEN`
+- Emits lifecycle events (`AnalysisRunStarted`, `AnalysisRunCompleted`, `AnalysisRunSkipped`, `AnalysisRunFailed`) and module outcomes (`ArtifactEmitted`, `ModuleFailed`)
+- Executes registered modules in fixed stages (signals → detectors → rules → outputs) with dependency ordering and lexicographic ties
+- Applies idempotency by `run_id` and persists optional module state via `AnalysisModuleStateRecord` v1 (append-only)
+- Provides observable logs/metrics and health/readiness reporting
+
+What it does not do:
+
+- Infer regimes, alter gating, or execute trading/alerting logic
+- Import upstream `market_data` or feed back into gating/engine
+- Use wall-clock/randomness in computation stages (outputs may perform I/O but never affect computation)
+
+Non-goals:
+
+- Strategy/execution directives, sizing, or alerts/UI
+- DSL-driven logic; configuration only enables modules and validates schemas
+- Persistence beyond idempotency/state replay needs
+
+Phase discipline:
+
+- Follow `Planning/consumers/analysis_engine/tasks.md` in order; contracts freeze first, then shell, registry/plan, config guardrails, execution harness, outputs, observability, determinism tests, readiness note.
+
+Determinism requirements:
+
+- Idempotent handling of duplicate `run_id`; skip reprocessing
+- Fixed stage and dependency order; artifact emission ordered by stage → module_id → artifact_name
+- Module failures isolated to `PARTIAL` runs; missing deps yield deterministic `ModuleFailed`
+- Replay-safe outputs from fixed input stream + config; module state appended only on successful modules
+
+Public entrypoints:
+
+- `consumers.analysis_engine.AnalysisEngine` (ingest `state_gate_event` → `analysis_engine_event`)
+- `consumers.analysis_engine.AnalysisEngineConfig` / `ModuleConfig` / `SymbolConfig` / `validate_config`
+- Registry and module helpers in `consumers.analysis_engine.registry` and `consumers.analysis_engine.modules`
+- Contracts in `consumers.analysis_engine.contracts` (`AnalysisEngineEvent`, `ModuleDefinition`, `AnalysisModuleStateRecord`)
+
+Minimal usage (gated run handling):
+
+```python
+from consumers.analysis_engine import AnalysisEngine, AnalysisEngineConfig, ModuleRegistry
+
+registry = ModuleRegistry(modules=[])  # populate with AnalysisModule instances
+config = AnalysisEngineConfig(enabled_modules=[], module_configs=[])
+engine = AnalysisEngine(registry=registry, config=config)
+
+# given a state_gate_event named event
+outputs = engine.consume(event)  # list of AnalysisEngineEvent (lifecycle, artifacts, failures)
+```
+
 ## Regime Engine
 
 The Regime Engine is the truth layer of a crypto scanner. It classifies why price is

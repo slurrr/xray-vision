@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, Mapping, Sequence, Tuple
 
 from .contracts import ArtifactEmittedPayload, ModuleDependency
 
-
-Key = Tuple[str, str]
+Key = tuple[str, str]
 
 
 @dataclass
 class ArtifactStore:
-    artifacts: Dict[Key, ArtifactEmittedPayload] = field(default_factory=dict)
+    artifacts: dict[Key, ArtifactEmittedPayload] = field(default_factory=dict)
 
     def add(self, artifact: ArtifactEmittedPayload) -> None:
         key = (artifact.module_id, artifact.artifact_name)
@@ -23,8 +22,10 @@ class ArtifactStore:
     def dependencies_available(self, dependencies: Iterable[ModuleDependency]) -> bool:
         return all(self.get(dep.module_id, dep.artifact_name) is not None for dep in dependencies)
 
-    def dependency_payloads(self, dependencies: Sequence[ModuleDependency]) -> Dict[str, ArtifactEmittedPayload]:
-        available: Dict[str, ArtifactEmittedPayload] = {}
+    def dependency_payloads(
+        self, dependencies: Sequence[ModuleDependency]
+    ) -> dict[str, ArtifactEmittedPayload]:
+        available: dict[str, ArtifactEmittedPayload] = {}
         for dependency in dependencies:
             artifact = self.get(dependency.module_id, dependency.artifact_name)
             if artifact is not None:

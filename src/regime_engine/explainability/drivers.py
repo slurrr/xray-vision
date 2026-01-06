@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 CONTRIBUTOR_DRIVERS: dict[str, str] = {
     "context.alt_breadth": "Context alt breadth",
     "context.beta_to_btc": "Context beta to BTC",

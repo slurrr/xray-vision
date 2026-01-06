@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Dict, List, Sequence, Set
 
 from consumers.state_gate.contracts import (
     EVENT_TYPE_GATE_EVALUATED,
@@ -25,7 +25,7 @@ from .contracts import (
     RunContext,
     RunStatus,
 )
-from .modules import AnalysisModule, ModuleResult
+from .modules import ModuleResult
 from .observability import NullLogger, NullMetrics, Observability
 from .persistence import IdempotencyStore, ModuleStateStore
 from .planning import STAGE_ORDER, ExecutionPlan, build_execution_plan
@@ -36,7 +36,7 @@ from .registry import ModuleRegistry
 class EngineState:
     idempotency: IdempotencyStore
     module_state_store: ModuleStateStore
-    halted_symbols: Set[str]
+    halted_symbols: set[str]
 
 
 class AnalysisEngine:
@@ -58,9 +58,11 @@ class AnalysisEngine:
             module_state_store=module_state_store or ModuleStateStore(),
             halted_symbols=set(),
         )
-        self._observability = observability or Observability(logger=NullLogger(), metrics=NullMetrics())
+        self._observability = observability or Observability(
+            logger=NullLogger(), metrics=NullMetrics()
+        )
 
-    def consume(self, event: StateGateEvent) -> List[AnalysisEngineEvent]:
+    def consume(self, event: StateGateEvent) -> list[AnalysisEngineEvent]:
         if event.symbol in self._state.halted_symbols:
             return []
 
@@ -117,8 +119,8 @@ class AnalysisEngine:
 
         context = _build_run_context(event)
         artifact_store = ArtifactStore()
-        module_failures: List[str] = []
-        events: List[AnalysisEngineEvent] = []
+        module_failures: list[str] = []
+        events: list[AnalysisEngineEvent] = []
         started = _analysis_event(
             event_type="AnalysisRunStarted",
             symbol=event.symbol,
@@ -153,7 +155,9 @@ class AnalysisEngine:
                     events.append(failed)
                     self._log_event(failed)
                     continue
-                dependency_payloads = artifact_store.dependency_payloads(module.definition.dependencies)
+                dependency_payloads = artifact_store.dependency_payloads(
+                    module.definition.dependencies
+                )
                 state_payload = None
                 latest_state = self._state.module_state_store.latest_by_symbol_and_module(
                     symbol=event.symbol, module_id=module.definition.module_id
@@ -188,7 +192,9 @@ class AnalysisEngine:
                     self._log_event(failed)
                     continue
 
-                ordered_artifacts = sorted(result.artifacts, key=lambda artifact: artifact.artifact_name)
+                ordered_artifacts = sorted(
+                    result.artifacts, key=lambda artifact: artifact.artifact_name
+                )
                 for artifact in ordered_artifacts:
                     artifact_store.add(artifact)
                     emitted = _analysis_event(
@@ -203,7 +209,10 @@ class AnalysisEngine:
                     events.append(emitted)
                     self._log_event(emitted)
 
-                if module.definition.state_schema_id is not None and result.state_payload is not None:
+                if (
+                    module.definition.state_schema_id is not None
+                    and result.state_payload is not None
+                ):
                     state_record = AnalysisModuleStateRecord(
                         symbol=event.symbol,
                         module_id=module.definition.module_id,
@@ -223,7 +232,9 @@ class AnalysisEngine:
             engine_timestamp_ms=event.engine_timestamp_ms,
             engine_mode=event.engine_mode,
             source_gate_reasons=event.reasons,
-            payload=AnalysisRunStatusPayload(status=status, module_failures=tuple(sorted(module_failures))),
+            payload=AnalysisRunStatusPayload(
+                status=status, module_failures=tuple(sorted(module_failures))
+            ),
         )
         events.append(completed)
         self._log_event(completed)
@@ -238,18 +249,24 @@ class AnalysisEngine:
         return self._state.module_state_store
 
     @property
-    def halted_symbols(self) -> Set[str]:
+    def halted_symbols(self) -> set[str]:
         return set(self._state.halted_symbols)
 
     def health_status(self):
         return self._observability.health_status()
 
-    def _build_plans(self) -> Dict[str, ExecutionPlan]:
-        plans: Dict[str, ExecutionPlan] = {}
+    def _build_plans(self) -> dict[str, ExecutionPlan]:
+        plans: dict[str, ExecutionPlan] = {}
         default_enabled = list(self._config.enabled_modules)
         if not default_enabled:
-            default_enabled = [module_id for module_id, module in self._registry.modules.items() if module.definition.enabled_by_default]
-        plans["__default__"] = build_execution_plan(self._registry, enabled_module_ids=default_enabled)
+            default_enabled = [
+                module_id
+                for module_id, module in self._registry.modules.items()
+                if module.definition.enabled_by_default
+            ]
+        plans["__default__"] = build_execution_plan(
+            self._registry, enabled_module_ids=default_enabled
+        )
         if self._config.symbols:
             for symbol_config in self._config.symbols:
                 plans[symbol_config.symbol] = build_execution_plan(
@@ -274,7 +291,8 @@ class AnalysisEngine:
         for artifact in artifacts:
             if artifact.artifact_kind not in expected_kind:
                 raise ValueError(
-                    f"invalid artifact kind for {module_id}: {artifact.artifact_kind} (expected {expected_kind})"
+                    f"invalid artifact kind for {module_id}: {artifact.artifact_kind} "
+                    f"(expected {expected_kind})"
                 )
 
     def _log_event(self, event: AnalysisEngineEvent) -> None:

@@ -1,39 +1,56 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping, Protocol
+from typing import Protocol
 
 from .contracts import AnalysisEngineEvent, ArtifactEmittedPayload, ModuleFailedPayload
 
 
 class StructuredLogger(Protocol):
-    def log(self, level: int, message: str, fields: Mapping[str, object]) -> None: ...  # pragma: no cover
+    def log(
+        self, level: int, message: str, fields: Mapping[str, object]
+    ) -> None: ...  # pragma: no cover
 
 
 class MetricsRecorder(Protocol):
-    def increment(self, name: str, value: int = 1, tags: Mapping[str, str] | None = None) -> None: ...  # pragma: no cover
+    def increment(
+        self, name: str, value: int = 1, tags: Mapping[str, str] | None = None
+    ) -> None: ...  # pragma: no cover
 
-    def observe(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None: ...  # pragma: no cover
+    def observe(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None: ...  # pragma: no cover
 
-    def gauge(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None: ...  # pragma: no cover
+    def gauge(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None: ...  # pragma: no cover
 
 
 @dataclass(frozen=True)
 class NullLogger:
-    def log(self, level: int, message: str, fields: Mapping[str, object]) -> None:  # pragma: no cover - stub
+    def log(
+        self, level: int, message: str, fields: Mapping[str, object]
+    ) -> None:  # pragma: no cover - stub
         return None
 
 
 @dataclass(frozen=True)
 class NullMetrics:
-    def increment(self, name: str, value: int = 1, tags: Mapping[str, str] | None = None) -> None:  # pragma: no cover - stub
+    def increment(
+        self, name: str, value: int = 1, tags: Mapping[str, str] | None = None
+    ) -> None:  # pragma: no cover - stub
         return None
 
-    def observe(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None:  # pragma: no cover - stub
+    def observe(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:  # pragma: no cover - stub
         return None
 
-    def gauge(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None:  # pragma: no cover - stub
+    def gauge(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:  # pragma: no cover - stub
         return None
 
 
@@ -84,7 +101,10 @@ class Observability:
         if isinstance(event.payload, ArtifactEmittedPayload):
             self.metrics.increment(
                 "analysis_engine.artifacts",
-                tags={"module_id": event.payload.module_id, "artifact_kind": event.payload.artifact_kind},
+                tags={
+                    "module_id": event.payload.module_id,
+                    "artifact_kind": event.payload.artifact_kind,
+                },
             )
         if isinstance(event.payload, ModuleFailedPayload):
             self.metrics.increment(
@@ -95,10 +115,14 @@ class Observability:
             status = getattr(event.payload, "status", "UNKNOWN")
             self.metrics.increment("analysis_engine.run_status", tags={"status": str(status)})
         if event.event_type == "AnalysisRunSkipped":
-            self.metrics.increment("analysis_engine.idempotency_skips", tags={"reason": "gate_closed"})
+            self.metrics.increment(
+                "analysis_engine.idempotency_skips", tags={"reason": "gate_closed"}
+            )
 
     def record_idempotency_skip(self) -> None:
-        self.metrics.increment("analysis_engine.idempotency_skips", tags={"reason": "duplicate_run_id"})
+        self.metrics.increment(
+            "analysis_engine.idempotency_skips", tags={"reason": "duplicate_run_id"}
+        )
 
     def mark_halted(self) -> None:
         self.halted = True

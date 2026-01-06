@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping, Protocol
+from typing import Protocol
 
 from market_data.adapter import StreamKey
 from market_data.contracts import RawMarketEvent
@@ -13,11 +14,17 @@ class StructuredLogger(Protocol):
 
 
 class MetricsRecorder(Protocol):
-    def increment(self, name: str, value: int = 1, tags: Mapping[str, str] | None = None) -> None: ...
+    def increment(
+        self, name: str, value: int = 1, tags: Mapping[str, str] | None = None
+    ) -> None: ...
 
-    def observe(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None: ...
+    def observe(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None: ...
 
-    def gauge(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None: ...
+    def gauge(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -36,13 +43,19 @@ class NullLogger:
 
 @dataclass(frozen=True)
 class NullMetrics:
-    def increment(self, name: str, value: int = 1, tags: Mapping[str, str] | None = None) -> None:
+    def increment(
+        self, name: str, value: int = 1, tags: Mapping[str, str] | None = None
+    ) -> None:
         return None
 
-    def observe(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None:
+    def observe(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:
         return None
 
-    def gauge(self, name: str, value: float, tags: Mapping[str, str] | None = None) -> None:
+    def gauge(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:
         return None
 
 

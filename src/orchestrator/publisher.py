@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping, Protocol
+from typing import Protocol
 
 from orchestrator.contracts import (
     ENGINE_MODE_HYSTERESIS,
-    ENGINE_MODE_TRUTH,
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
+    CutKind,
+    EngineMode,
     EngineRunCompletedPayload,
     EngineRunFailedPayload,
     HysteresisDecisionPayload,
     OrchestratorEvent,
-    SCHEMA_NAME,
-    SCHEMA_VERSION,
 )
 from orchestrator.sequencing import SymbolSequencer
 from regime_engine.contracts.outputs import RegimeOutput
@@ -28,7 +30,9 @@ class OrchestratorEventPublisher:
     sequencer: SymbolSequencer
 
     def publish(self, event: OrchestratorEvent) -> None:
-        self.sequencer.ensure_next(symbol=event.symbol, engine_timestamp_ms=event.engine_timestamp_ms)
+        self.sequencer.ensure_next(
+            symbol=event.symbol, engine_timestamp_ms=event.engine_timestamp_ms
+        )
         self.sink.write(event)
 
 
@@ -39,8 +43,8 @@ def build_engine_run_started(
     engine_timestamp_ms: int,
     cut_start_ingest_seq: int,
     cut_end_ingest_seq: int,
-    cut_kind: str,
-    engine_mode: str,
+    cut_kind: CutKind,
+    engine_mode: EngineMode,
     attempt: int | None = None,
     published_ts_ms: int | None = None,
 ) -> OrchestratorEvent:
@@ -67,8 +71,8 @@ def build_engine_run_completed(
     engine_timestamp_ms: int,
     cut_start_ingest_seq: int,
     cut_end_ingest_seq: int,
-    cut_kind: str,
-    engine_mode: str,
+    cut_kind: CutKind,
+    engine_mode: EngineMode,
     regime_output: RegimeOutput,
     attempt: int | None = None,
     published_ts_ms: int | None = None,
@@ -99,8 +103,8 @@ def build_engine_run_failed(
     engine_timestamp_ms: int,
     cut_start_ingest_seq: int,
     cut_end_ingest_seq: int,
-    cut_kind: str,
-    engine_mode: str,
+    cut_kind: CutKind,
+    engine_mode: EngineMode,
     error_kind: str,
     error_detail: str,
     attempt: int | None = None,
@@ -132,7 +136,7 @@ def build_hysteresis_decision_published(
     engine_timestamp_ms: int,
     cut_start_ingest_seq: int,
     cut_end_ingest_seq: int,
-    cut_kind: str,
+    cut_kind: CutKind,
     hysteresis_decision: HysteresisDecision,
     attempt: int | None = None,
     published_ts_ms: int | None = None,

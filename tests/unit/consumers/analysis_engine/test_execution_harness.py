@@ -1,4 +1,5 @@
 import unittest
+from typing import cast
 
 from consumers.analysis_engine import (
     AnalysisEngine,
@@ -11,7 +12,11 @@ from consumers.analysis_engine import (
     SignalModule,
     build_module_definition,
 )
-from consumers.analysis_engine.contracts import AnalysisRunStatusPayload, ModuleFailedPayload, RunContext
+from consumers.analysis_engine.contracts import (
+    AnalysisRunStatusPayload,
+    ModuleFailedPayload,
+    RunContext,
+)
 from consumers.state_gate.contracts import (
     EVENT_TYPE_GATE_EVALUATED,
     GATE_STATUS_OPEN,
@@ -63,7 +68,11 @@ class _Signal(SignalModule):
                 payload={"symbol": context.symbol},
             )
         ]
-        state_payload = {"count": (state or {}).get("count", 0) + 1} if self._stateful else None
+        state_payload = (
+            {"count": cast(dict[str, int], state or {}).get("count", 0) + 1}
+            if self._stateful
+            else None
+        )
         return ModuleResult(artifacts=artifacts, state_payload=state_payload)
 
 
@@ -94,7 +103,9 @@ class TestExecutionHarness(unittest.TestCase):
         )
         outputs = engine.consume(_gate_event())
         event_types = [event.event_type for event in outputs]
-        self.assertEqual(event_types, ["AnalysisRunStarted", "ArtifactEmitted", "AnalysisRunCompleted"])
+        self.assertEqual(
+            event_types, ["AnalysisRunStarted", "ArtifactEmitted", "AnalysisRunCompleted"]
+        )
         completed = outputs[-1]
         assert isinstance(completed.payload, AnalysisRunStatusPayload)
         self.assertEqual(completed.payload.status, "SUCCESS")
@@ -122,10 +133,14 @@ class TestExecutionHarness(unittest.TestCase):
         registry = ModuleRegistry([parent, child])
         engine = AnalysisEngine(
             registry=registry,
-            config=AnalysisEngineConfig(enabled_modules=["signal.parent", "signal.child"], module_configs=[]),
+            config=AnalysisEngineConfig(
+                enabled_modules=["signal.parent", "signal.child"], module_configs=[]
+            ),
         )
         outputs = engine.consume(_gate_event(run_id="run-missing"))
-        module_failed_payloads = [event.payload for event in outputs if isinstance(event.payload, ModuleFailedPayload)]
+        module_failed_payloads = [
+            event.payload for event in outputs if isinstance(event.payload, ModuleFailedPayload)
+        ]
         self.assertGreaterEqual(len(module_failed_payloads), 1)
         completed = outputs[-1]
         assert isinstance(completed.payload, AnalysisRunStatusPayload)
@@ -148,7 +163,9 @@ class TestExecutionHarness(unittest.TestCase):
         registry = ModuleRegistry([failing_stateful])
         engine = AnalysisEngine(
             registry=registry,
-            config=AnalysisEngineConfig(enabled_modules=["signal.stateful.fail"], module_configs=[]),
+            config=AnalysisEngineConfig(
+                enabled_modules=["signal.stateful.fail"], module_configs=[]
+            ),
         )
         engine.consume(_gate_event(run_id="run-state-fail"))
         self.assertEqual(len(engine.module_state_store.all()), 0)

@@ -9,8 +9,8 @@ if TYPE_CHECKING:
 
 
 def apply_vetoes(unweighted: UnweightedScores, snapshot: RegimeInputSnapshot) -> VetoedScores:
-    from regime_engine.veto import rules as veto_rules
     from regime_engine.scoring.types import VetoedScores
+    from regime_engine.veto import rules as veto_rules
 
     vetoes = []
     for rule in veto_rules.rule_registry():

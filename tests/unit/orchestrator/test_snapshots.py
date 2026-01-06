@@ -4,7 +4,7 @@ from market_data.contracts import RawMarketEvent
 from orchestrator.buffer import RawInputBuffer
 from orchestrator.cuts import Cut
 from orchestrator.snapshots import build_snapshot, select_snapshot_event
-from regime_engine.contracts.snapshots import MISSING, is_missing
+from regime_engine.contracts.snapshots import is_missing
 
 
 def _snapshot_event(symbol: str, timestamp_ms: int, seq: int) -> RawMarketEvent:
@@ -32,6 +32,7 @@ class TestSnapshots(unittest.TestCase):
         selected = select_snapshot_event(buffer=buffer, cut=cut, engine_timestamp_ms=100)
 
         self.assertIsNotNone(selected)
+        assert selected is not None
         self.assertEqual(selected.recv_ts_ms, 2)
 
     def test_build_snapshot_marks_missing_fields(self) -> None:

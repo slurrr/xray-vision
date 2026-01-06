@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, List
 
 from orchestrator.contracts import EngineRunRecord
 
 
 @dataclass
 class EngineRunLog:
-    records: List[EngineRunRecord]
+    records: list[EngineRunRecord]
 
     def __init__(self) -> None:
         self.records = []

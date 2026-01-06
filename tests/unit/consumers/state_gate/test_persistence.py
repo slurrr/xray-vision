@@ -2,7 +2,12 @@ import unittest
 
 from consumers.state_gate import StateGateProcessor, StateGateStateStore
 from consumers.state_gate.config import OperationLimits, StateGateConfig
-from orchestrator.contracts import EngineRunCompletedPayload, OrchestratorEvent, SCHEMA_NAME, SCHEMA_VERSION
+from orchestrator.contracts import (
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
+    EngineRunCompletedPayload,
+    OrchestratorEvent,
+)
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
 
@@ -43,14 +48,18 @@ def _completed_event(run_id: str, *, symbol: str, engine_timestamp_ms: int) -> O
         cut_end_ingest_seq=1,
         cut_kind="timer",
         engine_mode="truth",
-        payload=EngineRunCompletedPayload(regime_output=_regime_output(symbol, engine_timestamp_ms)),
+        payload=EngineRunCompletedPayload(
+            regime_output=_regime_output(symbol, engine_timestamp_ms)
+        ),
     )
 
 
 class TestPersistence(unittest.TestCase):
     def test_persists_state_records_before_output(self) -> None:
         processor = StateGateProcessor(config=_config())
-        events = processor.consume(_completed_event("run-1", symbol="TEST", engine_timestamp_ms=100))
+        events = processor.consume(
+            _completed_event("run-1", symbol="TEST", engine_timestamp_ms=100)
+        )
         self.assertEqual(len(events), 1)
         records = processor.records()
         self.assertEqual(len(records), 1)
@@ -86,8 +95,13 @@ class TestPersistence(unittest.TestCase):
         replay_processor = StateGateProcessor(config=config)
         replay_outputs = [output for event in events for output in replay_processor.consume(event)]
 
-        self.assertEqual([e.event_type for e in first_outputs], [e.event_type for e in replay_outputs])
-        self.assertEqual([e.reasons for e in first_outputs], [e.reasons for e in replay_outputs])
+        self.assertEqual(
+            [e.event_type for e in first_outputs],
+            [e.event_type for e in replay_outputs],
+        )
+        self.assertEqual(
+            [e.reasons for e in first_outputs], [e.reasons for e in replay_outputs]
+        )
 
 
 if __name__ == "__main__":

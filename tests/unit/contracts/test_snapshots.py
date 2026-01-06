@@ -1,6 +1,8 @@
 import unittest
 from dataclasses import FrozenInstanceError
 
+from regime_engine.contracts.outputs import RegimeOutput
+from regime_engine.contracts.regimes import Regime, RegimeScore
 from regime_engine.contracts.snapshots import (
     MISSING,
     ContextSnapshot,
@@ -11,8 +13,6 @@ from regime_engine.contracts.snapshots import (
     is_missing,
     missing_paths,
 )
-from regime_engine.contracts.regimes import Regime, RegimeScore
-from regime_engine.contracts.outputs import RegimeOutput
 
 
 class TestSnapshots(unittest.TestCase):

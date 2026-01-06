@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 
 from regime_engine.contracts.snapshots import MISSING, MarketSnapshot
 from regime_engine.features.market import (
@@ -10,8 +11,8 @@ from regime_engine.features.market import (
 )
 
 
-def _make_snapshot(**overrides: object) -> MarketSnapshot:
-    data = dict(
+def _make_snapshot(**overrides: Any) -> MarketSnapshot:
+    data: dict[str, Any] = dict(
         price=1.0,
         vwap=1.0,
         atr=2.0,
@@ -22,7 +23,7 @@ def _make_snapshot(**overrides: object) -> MarketSnapshot:
         sweep_score=6.0,
     )
     data.update(overrides)
-    return MarketSnapshot(**data)
+    return MarketSnapshot(**cast(dict[str, Any], data))
 
 
 class TestMarketFeatures(unittest.TestCase):

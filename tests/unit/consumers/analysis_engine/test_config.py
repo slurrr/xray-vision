@@ -32,7 +32,9 @@ class _StubSignal(SignalModule):
         )
         super().__init__(definition=definition)
 
-    def execute(self, *, context, dependencies, state=None):  # pragma: no cover - not used in config tests
+    def execute(
+        self, *, context, dependencies, state=None
+    ):  # pragma: no cover - not used in config tests
         return ModuleResult(artifacts=[])
 
 

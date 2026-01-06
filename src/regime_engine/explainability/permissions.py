@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from regime_engine.contracts.regimes import Regime
 
-
 REGIME_PERMISSIONS: dict[Regime, list[str]] = {
     Regime.CHOP_BALANCED: [Regime.CHOP_BALANCED.value],
     Regime.CHOP_STOPHUNT: [Regime.CHOP_STOPHUNT.value],

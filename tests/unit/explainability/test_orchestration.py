@@ -4,7 +4,10 @@ from regime_engine.confidence.types import ConfidenceBreakdown, ConfidenceResult
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime, RegimeScore
 from regime_engine.explainability import build_regime_output
-from regime_engine.explainability.validate import ExplainabilityValidationError, validate_explainability
+from regime_engine.explainability.validate import (
+    ExplainabilityValidationError,
+    validate_explainability,
+)
 from regime_engine.resolution.types import ConfidenceInputs, ResolutionResult
 from regime_engine.veto.types import VetoResult
 

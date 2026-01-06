@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from market_data.contracts import RawMarketEvent
 from market_data.pipeline import IngestionPipeline
@@ -155,11 +156,15 @@ def _map_trade_tick(payload: Mapping[str, Any]) -> Mapping[str, object]:
 
 def _map_book_top(payload: Mapping[str, Any]) -> Mapping[str, object]:
     return {
-        "best_bid_price": _parse_number(_require_field(payload, "best_bid_price"), "best_bid_price"),
+        "best_bid_price": _parse_number(
+            _require_field(payload, "best_bid_price"), "best_bid_price"
+        ),
         "best_bid_quantity": _parse_number(
             _require_field(payload, "best_bid_quantity"), "best_bid_quantity"
         ),
-        "best_ask_price": _parse_number(_require_field(payload, "best_ask_price"), "best_ask_price"),
+        "best_ask_price": _parse_number(
+            _require_field(payload, "best_ask_price"), "best_ask_price"
+        ),
         "best_ask_quantity": _parse_number(
             _require_field(payload, "best_ask_quantity"), "best_ask_quantity"
         ),

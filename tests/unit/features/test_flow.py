@@ -1,18 +1,19 @@
 import unittest
+from typing import Any, cast
 
-from regime_engine.contracts.snapshots import FlowSnapshot, MISSING
+from regime_engine.contracts.snapshots import MISSING, FlowSnapshot
 from regime_engine.features.flow import aggressive_volume_ratio, cvd_efficiency, cvd_slope
 
 
-def _make_snapshot(**overrides: object) -> FlowSnapshot:
-    data = dict(
+def _make_snapshot(**overrides: Any) -> FlowSnapshot:
+    data: dict[str, Any] = dict(
         cvd=1.0,
         cvd_slope=2.0,
         cvd_efficiency=3.0,
         aggressive_volume_ratio=4.0,
     )
     data.update(overrides)
-    return FlowSnapshot(**data)
+    return FlowSnapshot(**cast(dict[str, Any], data))
 
 
 class TestFlowFeatures(unittest.TestCase):

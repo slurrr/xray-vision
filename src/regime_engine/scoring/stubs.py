@@ -4,7 +4,6 @@ from regime_engine.contracts.regimes import Regime, RegimeScore
 from regime_engine.contracts.snapshots import RegimeInputSnapshot
 from regime_engine.scoring.helpers import score_symmetric
 
-
 _CHOP_BALANCED_CONTRIBUTORS = [
     "market.atr_zscore",
     "market.range_expansion",

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import fields
-from typing import Any, Mapping
+from typing import Any
 
 from market_data.contracts import RawMarketEvent
-from orchestrator.cuts import Cut
 from orchestrator.buffer import RawInputBuffer
+from orchestrator.cuts import Cut
 from regime_engine.contracts.snapshots import (
     MISSING,
     ContextSnapshot,

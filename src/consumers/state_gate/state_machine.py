@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Mapping
+from collections.abc import Mapping
 
 from orchestrator.contracts import EngineMode
 
@@ -10,31 +10,38 @@ from .contracts import (
     EVENT_TYPE_GATE_EVALUATED,
     EVENT_TYPE_STATE_RESET,
     GATE_STATUS_CLOSED,
+    RESET_REASON_ENGINE_GAP,
+    RESET_REASON_TIMESTAMP_GAP,
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
+    STATE_STATUS_BOOTSTRAP,
     GateEvaluatedPayload,
+    ResetReason,
     StateGateEvent,
     StateGateSnapshot,
     StateResetPayload,
-    STATE_STATUS_BOOTSTRAP,
-    SCHEMA_NAME,
-    SCHEMA_VERSION,
-    RESET_REASON_ENGINE_GAP,
-    RESET_REASON_TIMESTAMP_GAP,
 )
 from .evaluation import GateEvaluation
 
 
 class StateGateStateMachine:
-    def __init__(self, *, config: StateGateConfig, snapshots: Mapping[str, StateGateSnapshot] | None = None) -> None:
+    def __init__(
+        self, *, config: StateGateConfig, snapshots: Mapping[str, StateGateSnapshot] | None = None
+    ) -> None:
         self._config = config
-        self._snapshots: Dict[str, StateGateSnapshot] = dict(snapshots) if snapshots else {}
+        self._snapshots: dict[str, StateGateSnapshot] = dict(snapshots) if snapshots else {}
 
-    def process_run(self, run: AssembledRunInput, evaluation: GateEvaluation) -> List[StateGateEvent]:
+    def process_run(
+        self, run: AssembledRunInput, evaluation: GateEvaluation
+    ) -> list[StateGateEvent]:
         snapshot = self._snapshots.get(run.symbol, _bootstrap_snapshot(symbol=run.symbol))
-        events: List[StateGateEvent] = []
+        events: list[StateGateEvent] = []
 
         reset_reason = self._detect_reset(run=run, snapshot=snapshot)
         if reset_reason is not None:
-            reset_event = self._build_reset_event(run=run, reset_reason=reset_reason, engine_mode=evaluation.engine_mode)
+            reset_event = self._build_reset_event(
+                run=run, reset_reason=reset_reason, engine_mode=evaluation.engine_mode
+            )
             events.append(reset_event)
             snapshot = _bootstrap_snapshot(symbol=run.symbol)
             self._snapshots[run.symbol] = snapshot
@@ -56,8 +63,13 @@ class StateGateStateMachine:
     def snapshot_for(self, symbol: str) -> StateGateSnapshot:
         return self._snapshots.get(symbol, _bootstrap_snapshot(symbol=symbol))
 
-    def _detect_reset(self, *, run: AssembledRunInput, snapshot: StateGateSnapshot) -> str | None:
-        if run.hysteresis_decision is not None and run.hysteresis_decision.transition.reset_due_to_gap:
+    def _detect_reset(
+        self, *, run: AssembledRunInput, snapshot: StateGateSnapshot
+    ) -> ResetReason | None:
+        if (
+            run.hysteresis_decision is not None
+            and run.hysteresis_decision.transition.reset_due_to_gap
+        ):
             return RESET_REASON_ENGINE_GAP
 
         last_timestamp = snapshot.last_engine_timestamp_ms
@@ -72,7 +84,7 @@ class StateGateStateMachine:
         self,
         *,
         run: AssembledRunInput,
-        reset_reason: str,
+        reset_reason: ResetReason,
         engine_mode: EngineMode | None,
     ) -> StateGateEvent:
         return StateGateEvent(
@@ -90,7 +102,9 @@ class StateGateStateMachine:
             engine_mode=engine_mode,
         )
 
-    def _build_gate_event(self, *, run: AssembledRunInput, evaluation: GateEvaluation) -> StateGateEvent:
+    def _build_gate_event(
+        self, *, run: AssembledRunInput, evaluation: GateEvaluation
+    ) -> StateGateEvent:
         payload: GateEvaluatedPayload | None = None
         if evaluation.regime_output is not None or evaluation.hysteresis_decision is not None:
             payload = GateEvaluatedPayload(

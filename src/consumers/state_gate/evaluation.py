@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from orchestrator.contracts import EngineMode
 from regime_engine.contracts.outputs import RegimeOutput
@@ -12,14 +12,14 @@ from .config import StateGateConfig
 from .contracts import (
     GATE_STATUS_CLOSED,
     GATE_STATUS_OPEN,
-    GateStatus,
-    InputEventType,
     REASON_CODE_RUN_FAILED,
     REASON_CODE_TRANSITION_ACTIVE,
     REASON_PREFIX_DENYLISTED_INVALIDATION,
     STATE_STATUS_DEGRADED,
     STATE_STATUS_HOLD,
     STATE_STATUS_READY,
+    GateStatus,
+    InputEventType,
     StateStatus,
 )
 

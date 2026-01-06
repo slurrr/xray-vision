@@ -1,11 +1,12 @@
 import unittest
+from typing import Any, cast
 
-from regime_engine.contracts.snapshots import ContextSnapshot, MISSING
+from regime_engine.contracts.snapshots import MISSING, ContextSnapshot
 from regime_engine.features.context import alt_breadth, beta_to_btc, rs_vs_btc
 
 
-def _make_snapshot(**overrides: object) -> ContextSnapshot:
-    data = dict(
+def _make_snapshot(**overrides: Any) -> ContextSnapshot:
+    data: dict[str, Any] = dict(
         rs_vs_btc=1.0,
         beta_to_btc=2.0,
         alt_breadth=3.0,
@@ -13,7 +14,7 @@ def _make_snapshot(**overrides: object) -> ContextSnapshot:
         eth_regime=None,
     )
     data.update(overrides)
-    return ContextSnapshot(**data)
+    return ContextSnapshot(**cast(dict[str, Any], data))
 
 
 class TestContextFeatures(unittest.TestCase):

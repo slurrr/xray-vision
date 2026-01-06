@@ -12,7 +12,7 @@ from regime_engine.evaluation.validate import parse_record
 def read_records(paths: Sequence[str]) -> list[LogRecord]:
     records: list[LogRecord] = []
     for path in paths:
-        with open(path, "r", encoding="utf-8") as handle:
+        with open(path, encoding="utf-8") as handle:
             for line in handle:
                 line = line.strip()
                 if not line:

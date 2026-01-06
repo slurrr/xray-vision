@@ -2,12 +2,17 @@ import unittest
 
 from consumers.state_gate import RunAssembler
 from orchestrator.contracts import (
+    SCHEMA_NAME as ORCHESTRATOR_SCHEMA,
+)
+from orchestrator.contracts import (
+    SCHEMA_VERSION as ORCHESTRATOR_SCHEMA_VERSION,
+)
+from orchestrator.contracts import (
+    EngineMode,
     EngineRunCompletedPayload,
     EngineRunFailedPayload,
     HysteresisDecisionPayload,
     OrchestratorEvent,
-    SCHEMA_NAME as ORCHESTRATOR_SCHEMA,
-    SCHEMA_VERSION as ORCHESTRATOR_SCHEMA_VERSION,
 )
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
@@ -26,7 +31,9 @@ def _make_regime_output(symbol: str, timestamp: int) -> RegimeOutput:
     )
 
 
-def _make_completed_event(run_id: str, *, symbol: str, engine_timestamp_ms: int, engine_mode: str) -> OrchestratorEvent:
+def _make_completed_event(
+    run_id: str, *, symbol: str, engine_timestamp_ms: int, engine_mode: EngineMode
+) -> OrchestratorEvent:
     return OrchestratorEvent(
         schema=ORCHESTRATOR_SCHEMA,
         schema_version=ORCHESTRATOR_SCHEMA_VERSION,
@@ -44,7 +51,9 @@ def _make_completed_event(run_id: str, *, symbol: str, engine_timestamp_ms: int,
     )
 
 
-def _make_failed_event(run_id: str, *, symbol: str, engine_timestamp_ms: int, engine_mode: str) -> OrchestratorEvent:
+def _make_failed_event(
+    run_id: str, *, symbol: str, engine_timestamp_ms: int, engine_mode: EngineMode
+) -> OrchestratorEvent:
     return OrchestratorEvent(
         schema=ORCHESTRATOR_SCHEMA,
         schema_version=ORCHESTRATOR_SCHEMA_VERSION,
@@ -60,7 +69,9 @@ def _make_failed_event(run_id: str, *, symbol: str, engine_timestamp_ms: int, en
     )
 
 
-def _make_hysteresis_event(run_id: str, *, symbol: str, engine_timestamp_ms: int) -> OrchestratorEvent:
+def _make_hysteresis_event(
+    run_id: str, *, symbol: str, engine_timestamp_ms: int
+) -> OrchestratorEvent:
     transition = HysteresisTransition(
         stable_regime=None,
         candidate_regime=Regime.CHOP_BALANCED,
@@ -92,13 +103,16 @@ def _make_hysteresis_event(run_id: str, *, symbol: str, engine_timestamp_ms: int
 class TestRunAssembly(unittest.TestCase):
     def test_completed_run_emits_once_and_dedupes(self) -> None:
         assembler = RunAssembler()
-        event = _make_completed_event("run-1", symbol="TEST", engine_timestamp_ms=100, engine_mode="truth")
+        event = _make_completed_event(
+            "run-1", symbol="TEST", engine_timestamp_ms=100, engine_mode="truth"
+        )
 
         assembled = assembler.ingest(event)
         self.assertIsNotNone(assembled)
         assert assembled is not None  # for mypy type narrowing
         self.assertEqual(assembled.input_event_type, "EngineRunCompleted")
         self.assertEqual(assembled.run_id, "run-1")
+        assert assembled.regime_output is not None
         self.assertEqual(assembled.regime_output.timestamp, 100)
 
         duplicate = assembler.ingest(event)
@@ -106,7 +120,9 @@ class TestRunAssembly(unittest.TestCase):
 
     def test_hysteresis_overrides_completed_in_hysteresis_mode(self) -> None:
         assembler = RunAssembler()
-        completed = _make_completed_event("run-2", symbol="TEST", engine_timestamp_ms=200, engine_mode="hysteresis")
+        completed = _make_completed_event(
+            "run-2", symbol="TEST", engine_timestamp_ms=200, engine_mode="hysteresis"
+        )
         hysteresis = _make_hysteresis_event("run-2", symbol="TEST", engine_timestamp_ms=200)
 
         first = assembler.ingest(completed)
@@ -120,7 +136,9 @@ class TestRunAssembly(unittest.TestCase):
 
     def test_run_failed_is_ready_immediately(self) -> None:
         assembler = RunAssembler()
-        failed = _make_failed_event("run-3", symbol="TEST", engine_timestamp_ms=300, engine_mode="truth")
+        failed = _make_failed_event(
+            "run-3", symbol="TEST", engine_timestamp_ms=300, engine_mode="truth"
+        )
         assembled = assembler.ingest(failed)
         self.assertIsNotNone(assembled)
         assert assembled is not None
@@ -129,8 +147,12 @@ class TestRunAssembly(unittest.TestCase):
 
     def test_out_of_order_runs_are_ignored(self) -> None:
         assembler = RunAssembler()
-        newest = _make_completed_event("run-4", symbol="TEST", engine_timestamp_ms=400, engine_mode="truth")
-        older = _make_completed_event("run-5", symbol="TEST", engine_timestamp_ms=399, engine_mode="truth")
+        newest = _make_completed_event(
+            "run-4", symbol="TEST", engine_timestamp_ms=400, engine_mode="truth"
+        )
+        older = _make_completed_event(
+            "run-5", symbol="TEST", engine_timestamp_ms=399, engine_mode="truth"
+        )
 
         assembled_new = assembler.ingest(newest)
         self.assertIsNotNone(assembled_new)

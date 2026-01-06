@@ -2,7 +2,13 @@ import unittest
 
 from consumers.state_gate import StateGateProcessor
 from consumers.state_gate.config import OperationLimits, StateGateConfig
-from orchestrator.contracts import EngineRunCompletedPayload, EngineRunFailedPayload, OrchestratorEvent, SCHEMA_NAME, SCHEMA_VERSION
+from orchestrator.contracts import (
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
+    EngineRunCompletedPayload,
+    EngineRunFailedPayload,
+    OrchestratorEvent,
+)
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
 
@@ -43,7 +49,9 @@ def _completed_event(run_id: str, *, symbol: str, engine_timestamp_ms: int) -> O
         cut_end_ingest_seq=1,
         cut_kind="timer",
         engine_mode="truth",
-        payload=EngineRunCompletedPayload(regime_output=_regime_output(symbol, engine_timestamp_ms)),
+        payload=EngineRunCompletedPayload(
+            regime_output=_regime_output(symbol, engine_timestamp_ms)
+        ),
     )
 
 
@@ -78,8 +86,14 @@ class TestDeterminism(unittest.TestCase):
         replay_processor = StateGateProcessor(config=_config())
         outputs_second = [output for event in events for output in replay_processor.consume(event)]
 
-        summary_first = [(e.run_id, e.event_type, e.gate_status, e.state_status, tuple(e.reasons)) for e in outputs_first]
-        summary_second = [(e.run_id, e.event_type, e.gate_status, e.state_status, tuple(e.reasons)) for e in outputs_second]
+        summary_first = [
+            (e.run_id, e.event_type, e.gate_status, e.state_status, tuple(e.reasons))
+            for e in outputs_first
+        ]
+        summary_second = [
+            (e.run_id, e.event_type, e.gate_status, e.state_status, tuple(e.reasons))
+            for e in outputs_second
+        ]
         self.assertEqual(summary_first, summary_second)
         gate_evaluated_runs = [e.run_id for e in outputs_first if e.event_type == "GateEvaluated"]
         self.assertEqual(gate_evaluated_runs, ["run-1", "run-2", "run-3"])

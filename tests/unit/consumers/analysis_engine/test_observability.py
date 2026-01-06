@@ -1,4 +1,5 @@
 import unittest
+from collections.abc import Mapping
 
 from consumers.analysis_engine import (
     AnalysisEngine,
@@ -24,21 +25,27 @@ class FakeLogger:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
-    def log(self, level: int, message: str, fields: dict[str, object]) -> None:
+    def log(self, level: int, message: str, fields: Mapping[str, object]) -> None:
         self.calls.append({"level": level, "message": message, "fields": dict(fields)})
 
 
 class FakeMetrics:
     def __init__(self) -> None:
-        self.increments: list[tuple[str, int, dict[str, str] | None]] = []
+        self.increments: list[tuple[str, int, Mapping[str, str] | None]] = []
 
-    def increment(self, name: str, value: int = 1, tags: dict[str, str] | None = None) -> None:
+    def increment(
+        self, name: str, value: int = 1, tags: Mapping[str, str] | None = None
+    ) -> None:
         self.increments.append((name, value, tags))
 
-    def observe(self, name: str, value: float, tags: dict[str, str] | None = None) -> None:
+    def observe(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:
         return None
 
-    def gauge(self, name: str, value: float, tags: dict[str, str] | None = None) -> None:
+    def gauge(
+        self, name: str, value: float, tags: Mapping[str, str] | None = None
+    ) -> None:
         return None
 
 
@@ -106,9 +113,13 @@ class TestObservability(unittest.TestCase):
         )
         engine.consume(_gate_event())
         self.assertTrue(logger.calls)
-        run_status_metrics = [name for name, _, _ in metrics.increments if name == "analysis_engine.run_status"]
+        run_status_metrics = [
+            name for name, _, _ in metrics.increments if name == "analysis_engine.run_status"
+        ]
         self.assertTrue(run_status_metrics)
-        artifact_metrics = [name for name, _, _ in metrics.increments if name == "analysis_engine.artifacts"]
+        artifact_metrics = [
+            name for name, _, _ in metrics.increments if name == "analysis_engine.artifacts"
+        ]
         self.assertTrue(artifact_metrics)
 
     def test_idempotency_skip_metric(self) -> None:
@@ -124,7 +135,11 @@ class TestObservability(unittest.TestCase):
         event = _gate_event(run_id="dup")
         engine.consume(event)
         engine.consume(event)
-        skip_metrics = [name for name, _, tags in metrics.increments if name == "analysis_engine.idempotency_skips"]
+        skip_metrics = [
+            name
+            for name, _, tags in metrics.increments
+            if name == "analysis_engine.idempotency_skips"
+        ]
         self.assertTrue(skip_metrics)
 
     def test_health_reflects_halt(self) -> None:

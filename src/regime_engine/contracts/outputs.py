@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 from regime_engine.contracts.regimes import Regime
 
@@ -14,7 +13,7 @@ class RegimeOutput:
     regime: Regime
     confidence: float
 
-    drivers: List[str]
-    invalidations: List[str]
+    drivers: list[str]
+    invalidations: list[str]
 
-    permissions: List[str]
+    permissions: list[str]

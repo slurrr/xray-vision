@@ -3,7 +3,8 @@ import unittest
 from consumers.state_gate import GateEvaluation, StateGateConfig, StateGateStateMachine
 from consumers.state_gate.assembly import AssembledRunInput
 from consumers.state_gate.config import OperationLimits
-from orchestrator.contracts import ENGINE_MODE_HYSTERESIS
+from consumers.state_gate.contracts import StateResetPayload
+from orchestrator.contracts import ENGINE_MODE_HYSTERESIS, EngineMode
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
 from regime_engine.hysteresis.decision import HysteresisDecision, HysteresisTransition
@@ -33,7 +34,9 @@ def _regime_output(symbol: str, timestamp: int) -> RegimeOutput:
     )
 
 
-def _hysteresis_decision(symbol: str, timestamp: int, *, reset_due_to_gap: bool) -> HysteresisDecision:
+def _hysteresis_decision(
+    symbol: str, timestamp: int, *, reset_due_to_gap: bool
+) -> HysteresisDecision:
     return HysteresisDecision(
         selected_output=_regime_output(symbol=symbol, timestamp=timestamp),
         effective_confidence=0.5,
@@ -54,7 +57,7 @@ def _run_input(
     symbol: str,
     engine_timestamp_ms: int,
     input_event_type: str,
-    engine_mode: str | None,
+    engine_mode: EngineMode | None,
     regime_output: RegimeOutput | None = None,
     hysteresis_decision: HysteresisDecision | None = None,
 ) -> AssembledRunInput:
@@ -206,6 +209,7 @@ class TestStateMachine(unittest.TestCase):
         events = machine.process_run(second_run, closed_eval)
         self.assertEqual([event.event_type for event in events], ["StateReset", "GateEvaluated"])
         reset_event = events[0]
+        assert isinstance(reset_event.payload, StateResetPayload)
         self.assertEqual(reset_event.payload.reset_reason, "reset_timestamp_gap")
         gate_event = events[1]
         self.assertEqual(gate_event.state_status, "READY")
@@ -235,6 +239,7 @@ class TestStateMachine(unittest.TestCase):
 
         events = machine.process_run(run, evaluation)
         self.assertEqual([event.event_type for event in events], ["StateReset", "GateEvaluated"])
+        assert isinstance(events[0].payload, StateResetPayload)
         self.assertEqual(events[0].payload.reset_reason, "reset_engine_gap")
         self.assertEqual(events[1].state_status, "HOLD")
 

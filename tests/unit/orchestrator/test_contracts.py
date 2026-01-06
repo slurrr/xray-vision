@@ -14,11 +14,11 @@ from orchestrator.config import (
 )
 from orchestrator.contracts import (
     EVENT_TYPES,
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
     EngineRunRecord,
     OrchestratorEvent,
     RawInputBufferRecord,
-    SCHEMA_NAME,
-    SCHEMA_VERSION,
 )
 from orchestrator.run_id import derive_run_id
 

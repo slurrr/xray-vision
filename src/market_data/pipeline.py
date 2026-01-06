@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Callable, Mapping
 
 from market_data.config import BackpressureConfig
 from market_data.contracts import (
@@ -13,7 +13,6 @@ from market_data.contracts import (
 )
 from market_data.observability import Observability
 from market_data.sink import BackpressureError, RawEventSink
-
 
 ClockMs = Callable[[], int]
 
