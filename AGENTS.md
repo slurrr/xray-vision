@@ -15,6 +15,7 @@ If rules conflict, the **closest AGENTS.md in the directory tree wins**.
 This is a **multi-layer mono-repo** for the xray-vision system.
 
 Each top-level subsystem is:
+
 - Independently governed
 - Independently spec’d
 - Independently evolvable
@@ -62,6 +63,28 @@ Do not modify `sys.path` or bypass the environment.
 - No semantic interpretation without a spec change
 
 When rules are unclear, do not guess.
+
+---
+
+## Tooling & Style (Binding)
+
+All Python code MUST adhere to:
+
+- ruff (using repo ruff.toml)
+- pyright (default settings unless overridden)
+
+Rules:
+
+- Code that violates ruff or pyright is considered INVALID
+- Fixes must be made at implementation time, not deferred
+- Do NOT add noqa, type: ignore, or suppressions without explicit approval
+- Imports must satisfy isort rules
+- Types must be explicit where required by pyright
+
+Execution Constraint:
+
+- After any implementation phase, `ruff check .` and `pyright` MUST pass
+- If uncertain how to satisfy a rule, STOP and ASK
 
 ---
 
