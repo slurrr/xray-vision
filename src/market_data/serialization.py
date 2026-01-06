@@ -20,7 +20,9 @@ def _encode_raw_payload(raw_payload: bytes | str) -> tuple[str, str]:
     if isinstance(raw_payload, bytes):
         encoded = base64.b64encode(raw_payload).decode("ascii")
         return encoded, "base64"
-    return raw_payload, "text"
+    if isinstance(raw_payload, str):
+        return raw_payload, "text"
+    raise TypeError("raw_payload must be bytes or str")
 
 
 def deserialize_event(serialized: str) -> dict[str, Any]:

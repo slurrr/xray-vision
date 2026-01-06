@@ -3,7 +3,172 @@
 Each top-level subsystem is governed by its own AGENTS.md, spec.md and tasks.md.
 Rules are scoped to their directory tree.
 
-## Maket Data
+## Market Data
+
+The market_data layer acquires raw receipts, performs shape-level normalization,
+and emits immutable `RawMarketEvent` v1 envelopes. It is a transport + normalization
+pipe only.
+
+What it does:
+
+- Preserves `raw_payload` byte-for-byte alongside normalized fields
+- Emits canonical `RawMarketEvent` v1 with deterministic envelopes
+- Emits `DecodeFailure` instead of silent drops on malformed input
+
+What it does not do:
+
+- Construct candles, align timestamps, or infer gaps
+- Smooth, filter, de-duplicate, or correct values
+- Compute indicators, regimes, or signals
+
+Non-goals:
+
+- Aggregation or inference of market meaning
+- Downstream coupling or feedback
+- Local replay stores (handled downstream)
+
+Phase discipline:
+
+- Follow `Planning/market_data/tasks.md` strictly in order.
+- Contracts come first. No adapter lifecycle or decode paths until Phase 0 is frozen.
+
+Determinism requirements:
+
+- `recv_ts_ms` assigned exactly once at receipt
+- `raw_payload` is immutable
+- Normalized fields are direct mappings only
+
+Public entrypoints:
+
+- `market_data.contracts.RawMarketEvent` (v1 contract)
+- `market_data.pipeline.IngestionPipeline`
+- `market_data.decoder.decode_and_ingest(...) -> RawMarketEvent`
+
+Minimal usage (decode + emit):
+
+```python
+from market_data.contracts import RawMarketEvent
+from market_data.config import BackpressureConfig
+from market_data.decoder import decode_and_ingest
+from market_data.observability import NullLogger, NullMetrics, Observability
+from market_data.pipeline import IngestionPipeline
+
+
+class RecordingSink:
+    def __init__(self) -> None:
+        self.events = []
+
+    def write(self, event: RawMarketEvent, *, block: bool, timeout_ms: int | None) -> None:
+        self.events.append(event)
+
+
+pipeline = IngestionPipeline(
+    sink=RecordingSink(),
+    backpressure=BackpressureConfig(policy="block", max_pending=1, max_block_ms=50),
+    observability=Observability(logger=NullLogger(), metrics=NullMetrics()),
+)
+
+event = decode_and_ingest(
+    pipeline=pipeline,
+    event_type="TradeTick",
+    source_id="source",
+    symbol="TEST",
+    exchange_ts_ms=123,
+    raw_payload=b'{"price": 1.0, "quantity": 2.0, "side": "buy"}',
+    payload_content_type="application/json",
+)
+```
+
+## Orchestrator
+
+The orchestrator layer coordinates ingestion, buffering, scheduling, and engine
+invocation into a deterministic, replayable sequence of runs and outputs.
+
+What it does:
+
+- Appends every `RawMarketEvent` into an append-only buffer
+- Persists deterministic run metadata (`EngineRunRecord` v1)
+- Selects snapshot inputs deterministically and invokes the Regime Engine
+- Publishes `orchestrator_event` v1 outputs with per-symbol ordering
+
+What it does not do:
+
+- Compute indicators, features, regimes, or signals
+- Infer completeness, align timestamps, or fill gaps
+- Apply consumer-specific logic or feedback loops
+
+Non-goals:
+
+- Market interpretation or data correction
+- Consumer orchestration beyond generic fan-out
+- Modifying Regime Engine behavior
+
+Phase discipline:
+
+- Follow `Planning/orchestrator/tasks.md` strictly in order.
+- Contracts come first. No buffering/scheduling/invocation until Phase 0 is frozen.
+
+Determinism requirements:
+
+- Append-only buffer with strictly increasing `ingest_seq`
+- Deterministic `run_id` derivation
+- Replay equivalence from buffer + run logs
+
+Public entrypoints:
+
+- `orchestrator.contracts.OrchestratorEvent` (v1 contract)
+- `orchestrator.buffer.RawInputBuffer`
+- `orchestrator.scheduler.Scheduler`
+- `orchestrator.cuts.CutSelector`
+- `orchestrator.publisher.OrchestratorEventPublisher`
+
+Minimal usage (deterministic cut + publish):
+
+```python
+from market_data.contracts import RawMarketEvent
+from orchestrator.buffer import RawInputBuffer
+from orchestrator.cuts import CutSelector
+from orchestrator.publisher import OrchestratorEventPublisher, build_engine_run_started
+from orchestrator.sequencing import SymbolSequencer
+
+
+class RecordingSink:
+    def __init__(self) -> None:
+        self.events = []
+
+    def write(self, event) -> None:
+        self.events.append(event)
+
+
+buffer = RawInputBuffer(max_records=10)
+buffer.append(
+    RawMarketEvent(
+        schema="raw_market_event",
+        schema_version="1",
+        event_type="TradeTick",
+        source_id="source",
+        symbol="TEST",
+        exchange_ts_ms=None,
+        recv_ts_ms=1,
+        raw_payload=b"{}",
+        normalized={"price": 1.0, "quantity": 1.0, "side": None},
+    )
+)
+
+cut = CutSelector().next_cut(buffer=buffer, symbol="TEST", cut_end_ingest_seq=1, cut_kind="timer")
+publisher = OrchestratorEventPublisher(sink=RecordingSink(), sequencer=SymbolSequencer())
+publisher.publish(
+    build_engine_run_started(
+        run_id="run-1",
+        symbol="TEST",
+        engine_timestamp_ms=123,
+        cut_start_ingest_seq=cut.cut_start_ingest_seq,
+        cut_end_ingest_seq=cut.cut_end_ingest_seq,
+        cut_kind=cut.cut_kind,
+        engine_mode="truth",
+    )
+)
+```
 
 ## Regime Engine
 
