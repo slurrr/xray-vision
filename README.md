@@ -170,6 +170,72 @@ publisher.publish(
 )
 ```
 
+## State Gate
+
+The state_gate layer materializes a deterministic per-symbol gate over orchestrator outputs and publishes explicit `state_gate_event` v1 decisions.
+
+What it does:
+
+- Consumes `orchestrator_event` v1 (`EngineRunCompleted`, `EngineRunFailed`, `HysteresisDecisionPublished`)
+- Assembles a single authoritative payload per `run_id` (hysteresis wins when present)
+- Applies deterministic resets (`max_gap_ms`, hysteresis `reset_due_to_gap`) before evaluation
+- Evaluates gate status with ordered rules (run failure → CLOSED/DEGRADED; denylisted invalidations → CLOSED/HOLD; transition hold when configured; else OPEN/READY)
+- Persists append-only `StateGateStateRecord` v1 log and maintains a snapshot cache for restart/replay
+- Emits `GateEvaluated`, `StateReset`, and `StateGateHalted` events with stable reason codes
+
+What it does not do:
+
+- Compute market features, indicators, signals, or regimes
+- Apply consumer-specific routing, prioritization, or downstream coupling
+- Alter or “fix” Regime Engine outputs or orchestrator metadata
+- Make wall-clock-based gating decisions
+
+Non-goals:
+
+- Alerts, dashboards, or user-facing outputs beyond structured logs/metrics
+- Strategy or execution logic
+- Upstream feedback or data correction
+
+Phase discipline:
+
+- Follow `Planning/consumers/state_gate/tasks.md` in order; contracts are frozen first, gating logic and persistence follow, then observability/failure isolation and determinism tests.
+
+Determinism requirements:
+
+- Idempotent handling of duplicated `(run_id, input_event_type)` inputs
+- Exactly one `GateEvaluated` per `(symbol, run_id)`
+- Append-only state log; restart/replay must reproduce the same output sequence
+- Fail-closed: persistence/publish/internal failures halt and never emit OPEN gates
+
+Public entrypoints:
+
+- `consumers.state_gate.StateGateProcessor` (ingest orchestrator events → state_gate events)
+- `consumers.state_gate.StateGateConfig` / `OperationLimits` / `validate_config`
+- `consumers.state_gate.StateGateStateStore` (append-only log + snapshots)
+- Contracts in `consumers.state_gate.contracts` (`StateGateEvent`, `StateGateStateRecord`, reason/reset codes)
+
+Minimal usage (consume + decide):
+
+```python
+from consumers.state_gate import StateGateConfig, OperationLimits, StateGateProcessor
+from orchestrator.contracts import OrchestratorEvent
+
+
+config = StateGateConfig(
+    max_gap_ms=1000,
+    denylisted_invalidations=["late_data"],
+    block_during_transition=True,
+    input_limits=OperationLimits(max_pending=10, max_block_ms=100, max_failures=3),
+    persistence_limits=OperationLimits(max_pending=10, max_block_ms=100, max_failures=3),
+    publish_limits=OperationLimits(max_pending=10, max_block_ms=100, max_failures=3),
+)
+
+processor = StateGateProcessor(config=config)
+
+# given an orchestrator OrchestratorEvent named event
+outputs = processor.consume(event)  # list of StateGateEvent (GateEvaluated/StateReset/StateGateHalted)
+```
+
 ## Regime Engine
 
 The Regime Engine is the truth layer of a crypto scanner. It classifies why price is
