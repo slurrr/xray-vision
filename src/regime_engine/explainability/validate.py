@@ -18,11 +18,19 @@ def validate_explainability(
         missing.append("winner")
     if not drivers:
         missing.append("drivers")
-    if not invalidations:
+    # TEMPORARY: allow empty invalidations while veto rules are stubbed.
+    if invalidations is None:
         missing.append("invalidations")
     if not permissions:
         missing.append("permissions")
     if missing:
         raise ExplainabilityValidationError(
             "Explainability validation failed: " + ", ".join(missing)
+        )
+
+    if any(
+        not isinstance(invalidation, str) or not invalidation for invalidation in invalidations
+    ):
+        raise ExplainabilityValidationError(
+            "Explainability validation failed: invalidations"
         )

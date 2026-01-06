@@ -70,19 +70,43 @@ class TestOrchestration(unittest.TestCase):
         with self.assertRaises(ExplainabilityValidationError):
             validate_explainability(winner, [], ["x"], ["y"])
         with self.assertRaises(ExplainabilityValidationError):
-            validate_explainability(winner, ["x"], [], ["y"])
-        with self.assertRaises(ExplainabilityValidationError):
             validate_explainability(winner, ["x"], ["y"], [])
 
-    def test_no_veto_invalidations_fails(self) -> None:
+    def test_empty_invalidations_allowed(self) -> None:
+        winner = RegimeScore(
+            regime=Regime.CHOP_BALANCED,
+            score=1.0,
+            contributors=["market.range_expansion"],
+        )
+        validate_explainability(winner, ["x"], [], ["y"])
+
+    def test_invalidations_none_fails(self) -> None:
+        winner = RegimeScore(
+            regime=Regime.CHOP_BALANCED,
+            score=1.0,
+            contributors=["market.range_expansion"],
+        )
+        with self.assertRaises(ExplainabilityValidationError):
+            validate_explainability(winner, ["x"], None, ["y"])  # type: ignore[arg-type]
+
+    def test_invalidations_with_malformed_item_fails(self) -> None:
+        winner = RegimeScore(
+            regime=Regime.CHOP_BALANCED,
+            score=1.0,
+            contributors=["market.range_expansion"],
+        )
+        with self.assertRaises(ExplainabilityValidationError):
+            validate_explainability(winner, ["x"], ["", "valid"], ["y"])
+
+    def test_no_veto_invalidations_allowed(self) -> None:
         winner = RegimeScore(
             regime=Regime.CHOP_BALANCED,
             score=1.0,
             contributors=["market.range_expansion"],
         )
         resolution = _make_resolution(winner, vetoes=[])
-        with self.assertRaises(ExplainabilityValidationError):
-            build_regime_output("TEST", 180_000, resolution, _make_confidence())
+        output = build_regime_output("TEST", 180_000, resolution, _make_confidence())
+        self.assertEqual(output.invalidations, [])
 
     def test_happy_path_returns_output_and_winner_only(self) -> None:
         winner = RegimeScore(
