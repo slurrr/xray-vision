@@ -48,7 +48,7 @@ from orchestrator.publisher import (
     build_engine_run_completed,
     build_engine_run_failed,
     build_engine_run_started,
-    build_hysteresis_decision_published,
+    build_hysteresis_state_published,
 )
 from orchestrator.replay import ReplayResult, replay_events
 from orchestrator.retry import Retrier, RetrySchedule
@@ -106,7 +106,7 @@ __all__ = [
     "build_engine_run_completed",
     "build_engine_run_failed",
     "build_engine_run_started",
-    "build_hysteresis_decision_published",
+    "build_hysteresis_state_published",
     "ReplayResult",
     "replay_events",
     "HealthStatus",

@@ -76,7 +76,7 @@ def _record_from_event(event: StateGateEvent) -> StateGateStateRecord:
             regime_output=payload.regime_output
             if isinstance(payload, GateEvaluatedPayload)
             else None,
-            hysteresis_decision=payload.hysteresis_decision
+            hysteresis_state=payload.hysteresis_state
             if isinstance(payload, GateEvaluatedPayload)
             else None,
         )

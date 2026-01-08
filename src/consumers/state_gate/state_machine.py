@@ -10,7 +10,6 @@ from .contracts import (
     EVENT_TYPE_GATE_EVALUATED,
     EVENT_TYPE_STATE_RESET,
     GATE_STATUS_CLOSED,
-    RESET_REASON_ENGINE_GAP,
     RESET_REASON_TIMESTAMP_GAP,
     SCHEMA_NAME,
     SCHEMA_VERSION,
@@ -66,12 +65,6 @@ class StateGateStateMachine:
     def _detect_reset(
         self, *, run: AssembledRunInput, snapshot: StateGateSnapshot
     ) -> ResetReason | None:
-        if (
-            run.hysteresis_decision is not None
-            and run.hysteresis_decision.transition.reset_due_to_gap
-        ):
-            return RESET_REASON_ENGINE_GAP
-
         last_timestamp = snapshot.last_engine_timestamp_ms
         if last_timestamp is None:
             return None
@@ -106,10 +99,10 @@ class StateGateStateMachine:
         self, *, run: AssembledRunInput, evaluation: GateEvaluation
     ) -> StateGateEvent:
         payload: GateEvaluatedPayload | None = None
-        if evaluation.regime_output is not None or evaluation.hysteresis_decision is not None:
+        if evaluation.regime_output is not None or evaluation.hysteresis_state is not None:
             payload = GateEvaluatedPayload(
                 regime_output=evaluation.regime_output,
-                hysteresis_decision=evaluation.hysteresis_decision,
+                hysteresis_state=evaluation.hysteresis_state,
             )
         return StateGateEvent(
             schema=SCHEMA_NAME,

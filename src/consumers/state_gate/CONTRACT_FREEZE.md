@@ -14,12 +14,12 @@ Envelope (required):
 - reasons: array of stable reason codes
 
 Payload (per event type):
-- GateEvaluated: payload.regime_output (RegimeOutput) or payload.hysteresis_decision (HysteresisDecision) when present
+- GateEvaluated: payload.regime_output (RegimeOutput) or payload.hysteresis_state (HysteresisState) when present
 - StateReset: payload.reset_reason (reset_timestamp_gap | reset_engine_gap)
 - StateGateHalted: payload.error_kind, payload.error_detail (non-sensitive categories)
 
 Optional metadata (additive only):
-- input_event_type: EngineRunCompleted | EngineRunFailed | HysteresisDecisionPublished
+- input_event_type: EngineRunCompleted | EngineRunFailed | HysteresisStatePublished
 - engine_mode: truth | hysteresis
 
 ## Supported v1 event_type list

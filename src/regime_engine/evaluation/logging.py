@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.evaluation.records import LogRecord, TransitionRecord, record_id_for
-from regime_engine.hysteresis.decision import HysteresisDecision
+from regime_engine.hysteresis.state import HysteresisState
 
 
 def log_path(*, base_dir: str, timestamp: int) -> str:
@@ -17,19 +17,22 @@ def log_path(*, base_dir: str, timestamp: int) -> str:
 
 def build_log_record(
     truth: RegimeOutput,
-    decision: HysteresisDecision,
+    hysteresis_state: HysteresisState,
 ) -> LogRecord | None:
-    if truth.symbol != decision.selected_output.symbol:
+    if truth.symbol != hysteresis_state.symbol:
         return None
 
-    transition = decision.transition
+    transition_active = hysteresis_state.progress_current > 0
+    flipped = any(code.startswith("COMMIT_SWITCH:") for code in hysteresis_state.reason_codes)
     transition_record = TransitionRecord(
-        stable_regime=transition.stable_regime.value if transition.stable_regime else None,
-        candidate_regime=transition.candidate_regime.value if transition.candidate_regime else None,
-        candidate_count=transition.candidate_count,
-        transition_active=transition.transition_active,
-        flipped=transition.flipped,
-        reset_due_to_gap=transition.reset_due_to_gap,
+        stable_regime=hysteresis_state.anchor_regime.value,
+        candidate_regime=hysteresis_state.candidate_regime.value
+        if hysteresis_state.candidate_regime
+        else None,
+        candidate_count=hysteresis_state.progress_current,
+        transition_active=transition_active,
+        flipped=flipped,
+        reset_due_to_gap=False,
     )
 
     return LogRecord(
@@ -42,8 +45,8 @@ def build_log_record(
         drivers=list(truth.drivers),
         invalidations=list(truth.invalidations),
         permissions=list(truth.permissions),
-        selected_regime=decision.selected_output.regime.value,
-        effective_confidence=decision.effective_confidence,
+        selected_regime=hysteresis_state.anchor_regime.value,
+        effective_confidence=truth.confidence,
         transition=transition_record,
     )
 
@@ -59,11 +62,11 @@ def append_record(record: LogRecord, *, base_dir: str = "logs/regime") -> str:
 
 def log_update(
     truth: RegimeOutput,
-    decision: HysteresisDecision,
+    hysteresis_state: HysteresisState,
     *,
     base_dir: str = "logs/regime",
 ) -> bool:
-    record = build_log_record(truth, decision)
+    record = build_log_record(truth, hysteresis_state)
     if record is None:
         return False
     append_record(record, base_dir=base_dir)

@@ -33,6 +33,10 @@ Downstream systems may **not** recompute regime logic.
 > Any classical or heuristic regime classification logic is treated as
 > **evidence** that updates belief, not as a parallel source of authority.
 
+Hysteresis is defined exclusively over belief (RegimeState) and produces
+HysteresisState as the sole authoritative output; legacy decision-based
+hysteresis is deprecated.
+
 ---
 
 ## Source of Truth
@@ -85,7 +89,15 @@ If a phase is incomplete, stop.
 Phase 0 contracts are frozen. Agents must not modify snapshot contracts,
 missing-data semantics, alignment rules, or serialization format.
 
-Phase 1 — Phase 9 are frozen. Agents must not modify the Regime Engine.
+Phase status (Authoritative):
+
+- Phases 0–3 (belief refoundation): **Frozen**
+- Phase 4 (belief-first hysteresis & memory): **Authorized**
+- Phases 5–9: **Frozen**
+
+Agents may modify the Regime Engine **only** to implement Phase 4
+as specified in the canonical belief-first architecture.
+All other phases are locked.
 
 ---
 

@@ -6,7 +6,7 @@ from typing import Literal
 
 from market_data.contracts import RawMarketEvent
 from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.hysteresis.decision import HysteresisDecision
+from regime_engine.hysteresis.state import HysteresisState
 
 SCHEMA_NAME = "orchestrator_event"
 SCHEMA_VERSION = "1"
@@ -23,14 +23,14 @@ EventType = Literal[
     "EngineRunStarted",
     "EngineRunCompleted",
     "EngineRunFailed",
-    "HysteresisDecisionPublished",
+    "HysteresisStatePublished",
 ]
 
 EVENT_TYPES: Sequence[str] = (
     "EngineRunStarted",
     "EngineRunCompleted",
     "EngineRunFailed",
-    "HysteresisDecisionPublished",
+    "HysteresisStatePublished",
 )
 
 
@@ -46,8 +46,8 @@ class EngineRunCompletedPayload:
 
 
 @dataclass(frozen=True)
-class HysteresisDecisionPayload:
-    hysteresis_decision: HysteresisDecision
+class HysteresisStatePayload:
+    hysteresis_state: HysteresisState
 
 
 @dataclass(frozen=True)

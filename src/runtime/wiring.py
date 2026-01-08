@@ -19,12 +19,11 @@ from orchestrator.publisher import (
     build_engine_run_completed,
     build_engine_run_failed,
     build_engine_run_started,
-    build_hysteresis_decision_published,
+    build_hysteresis_state_published,
 )
 from orchestrator.run_id import derive_run_id
 from orchestrator.sequencing import SymbolSequencer
 from orchestrator.snapshots import build_snapshot, select_snapshot_event
-from regime_engine.hysteresis.decision import HysteresisDecision
 from runtime.bus import EventBus
 
 
@@ -104,7 +103,7 @@ class OrchestratorRuntime:
             snapshot_event=snapshot_event,
         )
         try:
-            output = self._engine_runner.run_engine(snapshot)
+            result = self._engine_runner.run_engine(snapshot)
         except Exception as exc:
             failed = build_engine_run_failed(
                 run_id=run_id,
@@ -121,21 +120,19 @@ class OrchestratorRuntime:
             self._publisher.publish(failed)
             return
 
-        if isinstance(output, HysteresisDecision):
-            decision_event = build_hysteresis_decision_published(
+        if result.hysteresis_state is not None:
+            decision_event = build_hysteresis_state_published(
                 run_id=run_id,
                 symbol=event.symbol,
                 engine_timestamp_ms=engine_timestamp_ms,
                 cut_start_ingest_seq=cut.cut_start_ingest_seq,
                 cut_end_ingest_seq=cut.cut_end_ingest_seq,
                 cut_kind=cut_kind,
-                hysteresis_decision=output,
+                hysteresis_state=result.hysteresis_state,
                 attempt=1,
             )
             self._publisher.publish(decision_event)
-            regime_output = output.selected_output
-        else:
-            regime_output = output
+        regime_output = result.regime_output
 
         completed = build_engine_run_completed(
             run_id=run_id,

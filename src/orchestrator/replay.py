@@ -6,16 +6,17 @@ from dataclasses import dataclass
 from orchestrator.buffer import RawInputBuffer
 from orchestrator.contracts import ENGINE_MODE_HYSTERESIS, EngineRunRecord, OrchestratorEvent
 from orchestrator.cuts import Cut
+from orchestrator.engine_runner import EngineRunResult
 from orchestrator.publisher import (
     build_engine_run_completed,
     build_engine_run_failed,
     build_engine_run_started,
-    build_hysteresis_decision_published,
+    build_hysteresis_state_published,
 )
 from orchestrator.sequencing import SymbolSequencer
 from orchestrator.snapshots import build_snapshot, select_snapshot_event
 from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.hysteresis.decision import HysteresisDecision
+from regime_engine.hysteresis.state import HysteresisState
 
 EngineCallable = Callable[[object], object]
 
@@ -95,24 +96,31 @@ def replay_events(
         )
         output = engine_runner(snapshot)
         if record.engine_mode == ENGINE_MODE_HYSTERESIS:
-            if not isinstance(output, HysteresisDecision):
-                raise ValueError("expected HysteresisDecision for hysteresis mode")
-            decision_event = build_hysteresis_decision_published(
+            if not isinstance(output, EngineRunResult):
+                raise ValueError("expected EngineRunResult for hysteresis mode")
+            regime_output = output.regime_output
+            hysteresis_state = output.hysteresis_state
+            if not isinstance(hysteresis_state, HysteresisState):
+                raise ValueError("expected HysteresisState for hysteresis mode")
+            decision_event = build_hysteresis_state_published(
                 run_id=record.run_id,
                 symbol=record.symbol,
                 engine_timestamp_ms=record.engine_timestamp_ms,
                 cut_start_ingest_seq=record.cut_start_ingest_seq,
                 cut_end_ingest_seq=record.cut_end_ingest_seq,
                 cut_kind=record.cut_kind,
-                hysteresis_decision=output,
+                hysteresis_state=hysteresis_state,
                 attempt=record.attempts,
             )
             _publish(sequencer, events, decision_event)
-            completed_output = output.selected_output
+            completed_output = regime_output
         else:
-            if not isinstance(output, RegimeOutput):
+            if isinstance(output, EngineRunResult):
+                completed_output = output.regime_output
+            elif isinstance(output, RegimeOutput):
+                completed_output = output
+            else:
                 raise ValueError("expected RegimeOutput for truth mode")
-            completed_output = output
 
         completed_event = build_engine_run_completed(
             run_id=record.run_id,

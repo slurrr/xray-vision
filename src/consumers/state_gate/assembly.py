@@ -9,11 +9,11 @@ from orchestrator.contracts import (
     EngineMode,
     EngineRunCompletedPayload,
     EngineRunFailedPayload,
-    HysteresisDecisionPayload,
+    HysteresisStatePayload,
     OrchestratorEvent,
 )
 from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.hysteresis.decision import HysteresisDecision
+from regime_engine.hysteresis.state import HysteresisState
 
 from .contracts import INPUT_EVENT_TYPES, InputEventType
 
@@ -26,7 +26,7 @@ class AssembledRunInput:
     engine_mode: EngineMode | None
     input_event_type: InputEventType
     regime_output: RegimeOutput | None = None
-    hysteresis_decision: HysteresisDecision | None = None
+    hysteresis_state: HysteresisState | None = None
 
 
 class RunAssembler:
@@ -78,10 +78,10 @@ class RunAssembler:
             engine_mode=cast(EngineMode | None, assembly.engine_mode),
             input_event_type=ready_event,
             regime_output=assembly.regime_output
-            if ready_event == "EngineRunCompleted"
+            if ready_event in ("EngineRunCompleted", "HysteresisStatePublished")
             else None,
-            hysteresis_decision=assembly.hysteresis_decision
-            if ready_event == "HysteresisDecisionPublished"
+            hysteresis_state=assembly.hysteresis_state
+            if ready_event == "HysteresisStatePublished"
             else None,
         )
         self._processed_run_ids.add(event.run_id)
@@ -108,7 +108,7 @@ class _RunAssembly:
         self.engine_timestamp_ms = engine_timestamp_ms
         self.engine_mode = engine_mode
         self.regime_output: RegimeOutput | None = None
-        self.hysteresis_decision: HysteresisDecision | None = None
+        self.hysteresis_state: HysteresisState | None = None
         self.failed = False
 
     def ensure_consistent(self, *, symbol: str, engine_timestamp_ms: int) -> None:
@@ -147,17 +147,17 @@ class _RunAssembly:
                     "EngineRunFailed payload must be EngineRunFailedPayload or None"
                 )
             self.failed = True
-        elif event.event_type == "HysteresisDecisionPublished":
-            if isinstance(payload, HysteresisDecisionPayload):
-                self.hysteresis_decision = payload.hysteresis_decision
+        elif event.event_type == "HysteresisStatePublished":
+            if isinstance(payload, HysteresisStatePayload):
+                self.hysteresis_state = payload.hysteresis_state
             else:
                 raise ValueError(
-                    "HysteresisDecisionPublished payload must be HysteresisDecisionPayload"
+                    "HysteresisStatePublished payload must be HysteresisStatePayload"
                 )
 
     def ready_event_type(self) -> InputEventType | None:
-        if self.hysteresis_decision is not None:
-            return "HysteresisDecisionPublished"
+        if self.hysteresis_state is not None:
+            return "HysteresisStatePublished"
         if self.failed:
             return "EngineRunFailed"
         if self.regime_output is not None and self.engine_mode != ENGINE_MODE_HYSTERESIS:

@@ -64,7 +64,7 @@ def _gate_event(run_id: str) -> StateGateEvent:
         state_status="READY",
         gate_status=GATE_STATUS_OPEN,
         reasons=["ok"],
-        payload=GateEvaluatedPayload(regime_output=None, hysteresis_decision=None),
+        payload=GateEvaluatedPayload(regime_output=None, hysteresis_state=None),
         input_event_type="EngineRunCompleted",
         engine_mode="truth",
     )

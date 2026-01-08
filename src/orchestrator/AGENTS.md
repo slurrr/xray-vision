@@ -111,7 +111,7 @@ Errors must be observable and attributable. Silence is failure.
 Allowed:
 
 * `market_data` contract types (input schema only)
-* Regime Engine public API + frozen payload contracts (`RegimeOutput`, `HysteresisDecision`)
+* Regime Engine public API + frozen payload contracts (`RegimeOutput`, `HysteresisState`)
 * Append-only storage primitives (file/local DB/etc.)
 * Messaging/broker clients for input subscription and output publishing
 

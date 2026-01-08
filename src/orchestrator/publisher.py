@@ -12,12 +12,12 @@ from orchestrator.contracts import (
     EngineMode,
     EngineRunCompletedPayload,
     EngineRunFailedPayload,
-    HysteresisDecisionPayload,
+    HysteresisStatePayload,
     OrchestratorEvent,
 )
 from orchestrator.sequencing import SymbolSequencer
 from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.hysteresis.decision import HysteresisDecision
+from regime_engine.hysteresis.state import HysteresisState
 
 
 class EventSink(Protocol):
@@ -129,7 +129,7 @@ def build_engine_run_failed(
     )
 
 
-def build_hysteresis_decision_published(
+def build_hysteresis_state_published(
     *,
     run_id: str,
     symbol: str,
@@ -137,7 +137,7 @@ def build_hysteresis_decision_published(
     cut_start_ingest_seq: int,
     cut_end_ingest_seq: int,
     cut_kind: CutKind,
-    hysteresis_decision: HysteresisDecision,
+    hysteresis_state: HysteresisState,
     attempt: int | None = None,
     published_ts_ms: int | None = None,
     counts_by_event_type: Mapping[str, int] | None = None,
@@ -145,7 +145,7 @@ def build_hysteresis_decision_published(
     return OrchestratorEvent(
         schema=SCHEMA_NAME,
         schema_version=SCHEMA_VERSION,
-        event_type="HysteresisDecisionPublished",
+        event_type="HysteresisStatePublished",
         run_id=run_id,
         symbol=symbol,
         engine_timestamp_ms=engine_timestamp_ms,
@@ -156,5 +156,5 @@ def build_hysteresis_decision_published(
         attempt=attempt,
         published_ts_ms=published_ts_ms,
         counts_by_event_type=counts_by_event_type,
-        payload=HysteresisDecisionPayload(hysteresis_decision=hysteresis_decision),
+        payload=HysteresisStatePayload(hysteresis_state=hysteresis_state),
     )

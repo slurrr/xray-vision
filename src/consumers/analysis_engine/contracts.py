@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.hysteresis.decision import HysteresisDecision
+from regime_engine.hysteresis.state import HysteresisState
 
 SCHEMA_NAME = "analysis_engine_event"
 SCHEMA_VERSION = "1"
@@ -113,7 +113,7 @@ class RunContext:
     gate_status: str
     gate_reasons: Sequence[str]
     regime_output: RegimeOutput | None
-    hysteresis_decision: HysteresisDecision | None
+    hysteresis_state: HysteresisState | None
 
 
 @dataclass(frozen=True)

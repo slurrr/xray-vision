@@ -19,6 +19,7 @@ from regime_engine.state import (
     project_regime,
     update_belief,
 )
+from regime_engine.state.state import RegimeState
 
 
 def _clamp_unit(value: float) -> float:
@@ -58,7 +59,9 @@ def _apply_projection_to_resolution(
     )
 
 
-def run_pipeline(snapshot: RegimeInputSnapshot) -> RegimeOutput:
+def run_pipeline_with_state(
+    snapshot: RegimeInputSnapshot,
+) -> tuple[RegimeOutput, RegimeState]:
     scores = score_all(snapshot)
     resolution = resolve_regime(scores, snapshot, weights={})
     confidence = synthesize_confidence(  # legacy confidence not belief
@@ -73,8 +76,6 @@ def run_pipeline(snapshot: RegimeInputSnapshot) -> RegimeOutput:
         symbol=snapshot.symbol,
         engine_timestamp_ms=snapshot.timestamp,
     )
-    # NOTE: RegimeState is currently re-initialized per run.
-    # Persistence and hysteresis will be introduced in Phase 4.
     prior_state = initialize_state(
         symbol=snapshot.symbol,
         engine_timestamp_ms=snapshot.timestamp,
@@ -88,9 +89,15 @@ def run_pipeline(snapshot: RegimeInputSnapshot) -> RegimeOutput:
             contributors=resolution.winner.contributors,
         )
     projected_resolution = _apply_projection_to_resolution(resolution, projected)
-    return build_regime_output(
+    output = build_regime_output(
         snapshot.symbol,
         snapshot.timestamp,
         projected_resolution,
         confidence,
     )
+    return output, updated_state
+
+
+def run_pipeline(snapshot: RegimeInputSnapshot) -> RegimeOutput:
+    output, _state = run_pipeline_with_state(snapshot)
+    return output

@@ -327,10 +327,10 @@ def _analysis_event(
 
 def _build_run_context(event: StateGateEvent) -> RunContext:
     regime_output = None
-    hysteresis_decision = None
+    hysteresis_state = None
     if isinstance(event.payload, GateEvaluatedPayload):
         regime_output = event.payload.regime_output
-        hysteresis_decision = event.payload.hysteresis_decision
+        hysteresis_state = event.payload.hysteresis_state
     return RunContext(
         symbol=event.symbol,
         run_id=event.run_id,
@@ -339,7 +339,7 @@ def _build_run_context(event: StateGateEvent) -> RunContext:
         gate_status=event.gate_status,
         gate_reasons=event.reasons,
         regime_output=regime_output,
-        hysteresis_decision=hysteresis_decision,
+        hysteresis_state=hysteresis_state,
     )
 
 

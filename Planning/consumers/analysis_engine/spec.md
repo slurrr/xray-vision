@@ -6,7 +6,7 @@
 
 Role in system flow:
 
-- Upstream layers produce authoritative regime truth (`RegimeOutput` / `HysteresisDecision`) and a gating decision (`state_gate_event`).
+- Upstream layers produce authoritative regime truth (`RegimeOutput` / `HysteresisState`) and a gating decision (`state_gate_event`).
 - `analysis_engine` runs *only when the gate is open* and produces analysis artifacts for downstream consumers.
 
 Naming note:
@@ -91,7 +91,7 @@ For each processed run, the run context is defined only by:
 - `symbol`, `run_id`, `engine_timestamp_ms`
 - `engine_mode` (`truth` | `hysteresis`) when present
 - the authoritative engine payload included in the `state_gate_event`:
-  - `payload.hysteresis_decision` when `engine_mode == hysteresis`, else
+  - `payload.hysteresis_state` when `engine_mode == hysteresis`, else
   - `payload.regime_output` when `engine_mode == truth`
 - `gate_status` and `reasons` (as inputs to analysis, not as state to modify)
 
@@ -297,7 +297,7 @@ Configuration controls *composition*, not logic.
 ### Allowed dependencies
 
 - `state_gate_event` v1 contract (input schema only).
-- Regime Engine output contracts as immutable payloads (`RegimeOutput`, `HysteresisDecision`).
+- Regime Engine output contracts as immutable payloads (`RegimeOutput`, `HysteresisState`).
 - Deterministic, pure computation libraries for signals/detectors/rules.
 - Output delivery primitives (logging, message publish) for output modules only.
 

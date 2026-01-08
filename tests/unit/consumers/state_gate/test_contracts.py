@@ -92,7 +92,7 @@ class TestStateGateContracts(unittest.TestCase):
         )
         self.assertEqual(
             INPUT_EVENT_TYPES,
-            ("EngineRunCompleted", "EngineRunFailed", "HysteresisDecisionPublished"),
+            ("EngineRunCompleted", "EngineRunFailed", "HysteresisStatePublished"),
         )
         self.assertIn(REASON_CODE_RUN_FAILED, REASON_CODES)
         self.assertIn(REASON_CODE_TRANSITION_ACTIVE, REASON_CODES)

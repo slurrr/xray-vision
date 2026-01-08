@@ -9,7 +9,7 @@
 
   ```text
   run(snapshot_inputs) -> RegimeOutput
-  run_with_hysteresis(snapshot_inputs, state, config) -> HysteresisDecision
+  run_with_hysteresis(snapshot_inputs, state, config) -> HysteresisState
   ```
 
 This document defines the architecture of all layers _around_ the Regime Engine.
@@ -195,7 +195,7 @@ Adapters
     → RawInputBuffer
       → Orchestrator
         → RegimeEngine.run(...)
-          → RegimeOutput / HysteresisDecision
+          → RegimeOutput / HysteresisState
             → Output Sinks
 ```
 
@@ -234,7 +234,7 @@ All data flows in one direction.
 ### Interface‑Level
 
 - Engine inputs: `snapshot_inputs` only
-- Engine outputs: `RegimeOutput` / `HysteresisDecision` only
+- Engine outputs: `RegimeOutput` / `HysteresisState` only
 
 ### Behavioral
 

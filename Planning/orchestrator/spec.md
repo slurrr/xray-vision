@@ -30,7 +30,7 @@ It exists to solve systemic problems that should not be handled by adapters or c
 - Define deterministic **snapshot cuts** (input slices) for each engine invocation.
 - Invoke the Regime Engine via public API only:
   - `regime_engine.engine.run(snapshot) -> RegimeOutput`
-  - `regime_engine.engine.run_with_hysteresis(snapshot, state, config) -> HysteresisDecision`
+  - `regime_engine.engine.run_with_hysteresis(snapshot, state, config) -> HysteresisState`
 - Publish engine outputs and minimal run metadata to a downstream output stream for consumers.
 
 ### Control-plane (lifecycle + configuration)
@@ -117,8 +117,8 @@ All consumer-facing outputs are emitted as versioned, append-only events.
 - `EngineRunFailed`
   - `payload.error_kind`: string (non-sensitive, stable category)
   - `payload.error_detail`: string (brief, non-sensitive)
-- `HysteresisDecisionPublished` (only when `engine_mode == hysteresis`)
-  - `payload.hysteresis_decision`: the engine’s `HysteresisDecision`
+- `HysteresisStatePublished` (only when `engine_mode == hysteresis`)
+  - `payload.hysteresis_state`: the engine’s `HysteresisState`
 
 Delivery semantics:
 
@@ -210,7 +210,7 @@ then a replay must reproduce the same sequence of `OrchestratorEvent` v1 outputs
 ### Allowed dependencies
 
 - `market_data` contract types (input schema only).
-- Regime Engine public API (`regime_engine.engine.*`) and its frozen contract payloads (`RegimeOutput`, `HysteresisDecision`).
+- Regime Engine public API (`regime_engine.engine.*`) and its frozen contract payloads (`RegimeOutput`, `HysteresisState`).
 - Storage primitives for append-only logs (file, local DB, or equivalent) as an implementation detail.
 - Messaging primitives for input subscription and output publish (broker choice is an implementation detail).
 

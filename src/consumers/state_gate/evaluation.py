@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from orchestrator.contracts import EngineMode
 from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.hysteresis.decision import HysteresisDecision
+from regime_engine.hysteresis.state import HysteresisState
 
 from .assembly import AssembledRunInput
 from .config import StateGateConfig
@@ -32,7 +32,7 @@ class GateEvaluation:
     input_event_type: InputEventType
     engine_mode: EngineMode | None
     regime_output: RegimeOutput | None = None
-    hysteresis_decision: HysteresisDecision | None = None
+    hysteresis_state: HysteresisState | None = None
 
 
 class GateEvaluator:
@@ -90,12 +90,12 @@ class GateEvaluator:
         )
 
     def _maybe_transition_hold(self, run: AssembledRunInput) -> GateEvaluation | None:
-        decision = run.hysteresis_decision
-        if decision is None:
+        hysteresis_state = run.hysteresis_state
+        if hysteresis_state is None:
             return None
         if not self._config.block_during_transition:
             return None
-        if not decision.transition.transition_active:
+        if hysteresis_state.progress_current <= 0:
             return None
         return GateEvaluation(
             gate_status=GATE_STATUS_CLOSED,
@@ -103,18 +103,20 @@ class GateEvaluator:
             reasons=[REASON_CODE_TRANSITION_ACTIVE],
             input_event_type=run.input_event_type,
             engine_mode=run.engine_mode,
-            hysteresis_decision=decision,
+            regime_output=run.regime_output,
+            hysteresis_state=hysteresis_state,
         )
 
     def _open_gate(self, run: AssembledRunInput) -> GateEvaluation:
-        if run.hysteresis_decision is not None:
+        if run.hysteresis_state is not None:
             return GateEvaluation(
                 gate_status=GATE_STATUS_OPEN,
                 state_status=STATE_STATUS_READY,
                 reasons=[],
                 input_event_type=run.input_event_type,
                 engine_mode=run.engine_mode,
-                hysteresis_decision=run.hysteresis_decision,
+                regime_output=run.regime_output,
+                hysteresis_state=run.hysteresis_state,
             )
         return GateEvaluation(
             gate_status=GATE_STATUS_OPEN,

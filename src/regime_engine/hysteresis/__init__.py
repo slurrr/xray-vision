@@ -1,31 +1,35 @@
 from __future__ import annotations
 
-from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.hysteresis.decision import HysteresisDecision, HysteresisTransition
-from regime_engine.hysteresis.rules import HysteresisError, apply_hysteresis
+from regime_engine.hysteresis.rules import (
+    GateDecision,
+    advance_hysteresis,
+    evaluate_gate,
+    select_candidate,
+)
 from regime_engine.hysteresis.state import HysteresisConfig, HysteresisState, HysteresisStore
+from regime_engine.state.state import RegimeState
 
 
-def process_output(
-    output: RegimeOutput,
+def process_state(
+    regime_state: RegimeState,
     *,
     store: HysteresisStore,
     config: HysteresisConfig | None = None,
-) -> HysteresisDecision:
+) -> HysteresisState:
     active_config = config or HysteresisConfig()
-    state = store.state_for(output.symbol)
-    decision, next_state = apply_hysteresis(output, state=state, config=active_config)
-    store.update(output.symbol, next_state)
-    return decision
+    prev_state = store.state_for(regime_state.symbol)
+    next_state = advance_hysteresis(prev_state, regime_state, active_config)
+    store.update(regime_state.symbol, next_state)
+    return next_state
 
 
 __all__ = [
+    "GateDecision",
     "HysteresisConfig",
-    "HysteresisDecision",
-    "HysteresisError",
     "HysteresisState",
     "HysteresisStore",
-    "HysteresisTransition",
-    "apply_hysteresis",
-    "process_output",
+    "advance_hysteresis",
+    "evaluate_gate",
+    "process_state",
+    "select_candidate",
 ]

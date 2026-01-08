@@ -1,34 +1,45 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
+
+SCHEMA_NAME = "hysteresis_state"
+SCHEMA_VERSION = "1"
 
 
 @dataclass(frozen=True)
 class HysteresisConfig:
-    min_persistence_updates: int = 3
-    min_confidence_for_flip: float = 0.6
-    decay_factor: float = 0.85
-    min_confidence_floor: float = 0.2
-    update_interval_ms: int = 180_000
+    window_updates: int = 3
+    enter_threshold: float = 0.6
+    commit_threshold: float = 0.6
+    min_lead_over_anchor: float | None = None
+    decay_step: int = 1
+    allowed_regimes: Sequence[Regime] | None = None
 
 
 @dataclass(frozen=True)
 class HysteresisState:
-    stable_output: RegimeOutput | None = None
-    candidate_regime: Regime | None = None
-    candidate_count: int = 0
-    last_timestamp: int | None = None
+    schema: str
+    schema_version: str
+    symbol: str
+    engine_timestamp_ms: int
+    anchor_regime: Regime
+    candidate_regime: Regime | None
+    progress_current: int
+    progress_required: int
+    last_commit_timestamp_ms: int | None
+    reason_codes: tuple[str, ...]
+    debug: Mapping[str, object] | None = None
 
 
 @dataclass
 class HysteresisStore:
     states: dict[str, HysteresisState]
 
-    def state_for(self, symbol: str) -> HysteresisState:
-        return self.states.get(symbol, HysteresisState())
+    def state_for(self, symbol: str) -> HysteresisState | None:
+        return self.states.get(symbol)
 
     def update(self, symbol: str, state: HysteresisState) -> None:
         self.states[symbol] = state

@@ -110,7 +110,7 @@ Errors must be observable and must never result in an `OPEN` gate.
 Allowed:
 
 * `orchestrator_event` v1 input contracts
-* Regime Engine output contracts (`RegimeOutput`, `HysteresisDecision`)
+* Regime Engine output contracts (`RegimeOutput`, `HysteresisState`)
 * Local persistence primitives (log + snapshot cache)
 
 Forbidden:

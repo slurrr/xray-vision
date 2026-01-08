@@ -11,12 +11,12 @@ from orchestrator.contracts import (
     EngineMode,
     EngineRunCompletedPayload,
     EngineRunFailedPayload,
-    HysteresisDecisionPayload,
+    HysteresisStatePayload,
     OrchestratorEvent,
 )
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
-from regime_engine.hysteresis.decision import HysteresisDecision, HysteresisTransition
+from regime_engine.hysteresis.state import SCHEMA_NAME, SCHEMA_VERSION, HysteresisState
 
 
 def _make_regime_output(symbol: str, timestamp: int) -> RegimeOutput:
@@ -72,23 +72,23 @@ def _make_failed_event(
 def _make_hysteresis_event(
     run_id: str, *, symbol: str, engine_timestamp_ms: int
 ) -> OrchestratorEvent:
-    transition = HysteresisTransition(
-        stable_regime=None,
-        candidate_regime=Regime.CHOP_BALANCED,
-        candidate_count=1,
-        transition_active=True,
-        flipped=False,
-        reset_due_to_gap=False,
-    )
-    decision = HysteresisDecision(
-        selected_output=_make_regime_output(symbol=symbol, timestamp=engine_timestamp_ms),
-        effective_confidence=0.5,
-        transition=transition,
+    state = HysteresisState(
+        schema=SCHEMA_NAME,
+        schema_version=SCHEMA_VERSION,
+        symbol=symbol,
+        engine_timestamp_ms=engine_timestamp_ms,
+        anchor_regime=Regime.CHOP_BALANCED,
+        candidate_regime=Regime.SQUEEZE_UP,
+        progress_current=1,
+        progress_required=3,
+        last_commit_timestamp_ms=None,
+        reason_codes=("PROGRESS_RESET",),
+        debug=None,
     )
     return OrchestratorEvent(
         schema=ORCHESTRATOR_SCHEMA,
         schema_version=ORCHESTRATOR_SCHEMA_VERSION,
-        event_type="HysteresisDecisionPublished",
+        event_type="HysteresisStatePublished",
         run_id=run_id,
         symbol=symbol,
         engine_timestamp_ms=engine_timestamp_ms,
@@ -96,7 +96,7 @@ def _make_hysteresis_event(
         cut_end_ingest_seq=1,
         cut_kind="timer",
         engine_mode="hysteresis",
-        payload=HysteresisDecisionPayload(hysteresis_decision=decision),
+        payload=HysteresisStatePayload(hysteresis_state=state),
     )
 
 
@@ -131,7 +131,7 @@ class TestRunAssembly(unittest.TestCase):
         assembled = assembler.ingest(hysteresis)
         self.assertIsNotNone(assembled)
         assert assembled is not None
-        self.assertEqual(assembled.input_event_type, "HysteresisDecisionPublished")
+        self.assertEqual(assembled.input_event_type, "HysteresisStatePublished")
         self.assertIsNone(assembler.ingest(hysteresis))
 
     def test_run_failed_is_ready_immediately(self) -> None:

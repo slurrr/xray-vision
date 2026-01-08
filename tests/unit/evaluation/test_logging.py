@@ -3,7 +3,7 @@ import unittest
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
 from regime_engine.evaluation.logging import build_log_record, log_path
-from regime_engine.hysteresis.decision import HysteresisDecision, HysteresisTransition
+from regime_engine.hysteresis.state import SCHEMA_NAME, SCHEMA_VERSION, HysteresisState
 
 
 class TestLogging(unittest.TestCase):
@@ -17,21 +17,21 @@ class TestLogging(unittest.TestCase):
             invalidations=["invalid"],
             permissions=["perm"],
         )
-        transition = HysteresisTransition(
-            stable_regime=Regime.CHOP_BALANCED,
+        hysteresis_state = HysteresisState(
+            schema=SCHEMA_NAME,
+            schema_version=SCHEMA_VERSION,
+            symbol="TEST",
+            engine_timestamp_ms=180_000,
+            anchor_regime=Regime.CHOP_BALANCED,
             candidate_regime=None,
-            candidate_count=0,
-            transition_active=False,
-            flipped=False,
-            reset_due_to_gap=False,
-        )
-        decision = HysteresisDecision(
-            selected_output=output,
-            effective_confidence=0.7,
-            transition=transition,
+            progress_current=0,
+            progress_required=3,
+            last_commit_timestamp_ms=None,
+            reason_codes=(),
+            debug=None,
         )
 
-        record = build_log_record(output, decision)
+        record = build_log_record(output, hysteresis_state)
         self.assertIsNotNone(record)
         assert record is not None
         self.assertEqual(record.schema_version, 1)

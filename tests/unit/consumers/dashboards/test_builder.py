@@ -36,12 +36,12 @@ from orchestrator.contracts import (
     EngineMode,
     EngineRunCompletedPayload,
     EventType,
-    HysteresisDecisionPayload,
+    HysteresisStatePayload,
     OrchestratorEvent,
 )
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
-from regime_engine.hysteresis.decision import HysteresisDecision, HysteresisTransition
+from regime_engine.hysteresis.state import SCHEMA_NAME, SCHEMA_VERSION, HysteresisState
 
 
 def _regime_output(*, symbol: str, timestamp: int, regime: Regime) -> RegimeOutput:
@@ -53,6 +53,31 @@ def _regime_output(*, symbol: str, timestamp: int, regime: Regime) -> RegimeOutp
         drivers=["driver-1"],
         invalidations=["invalid-1"],
         permissions=["perm-1"],
+    )
+
+
+def _hysteresis_state(
+    *,
+    symbol: str,
+    engine_timestamp_ms: int,
+    anchor_regime: Regime,
+    candidate_regime: Regime | None,
+    progress_current: int,
+    progress_required: int,
+    reason_codes: tuple[str, ...],
+) -> HysteresisState:
+    return HysteresisState(
+        schema=SCHEMA_NAME,
+        schema_version=SCHEMA_VERSION,
+        symbol=symbol,
+        engine_timestamp_ms=engine_timestamp_ms,
+        anchor_regime=anchor_regime,
+        candidate_regime=candidate_regime,
+        progress_current=progress_current,
+        progress_required=progress_required,
+        last_commit_timestamp_ms=None,
+        reason_codes=reason_codes,
+        debug=None,
     )
 
 
@@ -141,17 +166,14 @@ class TestDashboardBuilder(unittest.TestCase):
         builder = DashboardBuilder(time_fn=lambda: 999)
         symbol = "TEST"
         truth_output = _regime_output(symbol=symbol, timestamp=100, regime=Regime.CHOP_BALANCED)
-        hysteresis_decision = HysteresisDecision(
-            selected_output=_regime_output(symbol=symbol, timestamp=150, regime=Regime.SQUEEZE_UP),
-            effective_confidence=0.7,
-            transition=HysteresisTransition(
-                stable_regime=Regime.CHOP_BALANCED,
-                candidate_regime=Regime.SQUEEZE_UP,
-                candidate_count=2,
-                transition_active=True,
-                flipped=True,
-                reset_due_to_gap=False,
-            ),
+        hysteresis_state = _hysteresis_state(
+            symbol=symbol,
+            engine_timestamp_ms=150,
+            anchor_regime=Regime.CHOP_BALANCED,
+            candidate_regime=Regime.SQUEEZE_UP,
+            progress_current=2,
+            progress_required=2,
+            reason_codes=("COMMIT_SWITCH:CHOP_BALANCED->SQUEEZE_UP", "PROGRESS_INC"),
         )
 
         builder.ingest_orchestrator_event(
@@ -166,17 +188,17 @@ class TestDashboardBuilder(unittest.TestCase):
         )
         builder.ingest_orchestrator_event(
             _orchestrator_event(
-                event_type="HysteresisDecisionPublished",
+                event_type="HysteresisStatePublished",
                 run_id="run-2",
                 symbol=symbol,
                 engine_timestamp_ms=150,
-                payload=HysteresisDecisionPayload(hysteresis_decision=hysteresis_decision),
+                payload=HysteresisStatePayload(hysteresis_state=hysteresis_state),
                 engine_mode="hysteresis",
             )
         )
 
         gate_payload = GateEvaluatedPayload(
-            regime_output=truth_output, hysteresis_decision=hysteresis_decision
+            regime_output=truth_output, hysteresis_state=hysteresis_state
         )
         builder.ingest_state_gate_event(
             _state_gate_event(
@@ -279,70 +301,55 @@ class TestDashboardBuilder(unittest.TestCase):
     def test_hysteresis_summary_carries_progress_and_trend(self) -> None:
         builder = DashboardBuilder(time_fn=lambda: 222)
         symbol = "BBB"
-        first_decision = HysteresisDecision(
-            selected_output=_regime_output(
-                symbol=symbol, timestamp=10, regime=Regime.TREND_BUILD_UP
-            ),
-            effective_confidence=0.2,
-            transition=HysteresisTransition(
-                stable_regime=Regime.TREND_BUILD_UP,
-                candidate_regime=Regime.TREND_BUILD_DOWN,
-                candidate_count=1,
-                transition_active=True,
-                flipped=False,
-                reset_due_to_gap=False,
-            ),
+        first_state = _hysteresis_state(
+            symbol=symbol,
+            engine_timestamp_ms=10,
+            anchor_regime=Regime.TREND_BUILD_UP,
+            candidate_regime=Regime.TREND_BUILD_DOWN,
+            progress_current=1,
+            progress_required=3,
+            reason_codes=("PROGRESS_RESET",),
         )
-        second_decision = HysteresisDecision(
-            selected_output=_regime_output(
-                symbol=symbol, timestamp=20, regime=Regime.TREND_BUILD_DOWN
-            ),
-            effective_confidence=0.4,
-            transition=HysteresisTransition(
-                stable_regime=Regime.TREND_BUILD_UP,
-                candidate_regime=Regime.TREND_BUILD_DOWN,
-                candidate_count=3,
-                transition_active=True,
-                flipped=True,
-                reset_due_to_gap=False,
-            ),
+        second_state = _hysteresis_state(
+            symbol=symbol,
+            engine_timestamp_ms=20,
+            anchor_regime=Regime.TREND_BUILD_UP,
+            candidate_regime=Regime.TREND_BUILD_DOWN,
+            progress_current=3,
+            progress_required=3,
+            reason_codes=("PROGRESS_INC",),
         )
-        third_decision = HysteresisDecision(
-            selected_output=_regime_output(
-                symbol=symbol, timestamp=30, regime=Regime.TREND_BUILD_DOWN
-            ),
-            effective_confidence=0.1,
-            transition=HysteresisTransition(
-                stable_regime=Regime.TREND_BUILD_DOWN,
-                candidate_regime=Regime.TREND_BUILD_DOWN,
-                candidate_count=4,
-                transition_active=True,
-                flipped=False,
-                reset_due_to_gap=False,
-            ),
+        third_state = _hysteresis_state(
+            symbol=symbol,
+            engine_timestamp_ms=30,
+            anchor_regime=Regime.TREND_BUILD_DOWN,
+            candidate_regime=None,
+            progress_current=0,
+            progress_required=3,
+            reason_codes=("CANDIDATE_SAME_AS_ANCHOR",),
         )
 
         builder.ingest_orchestrator_event(
             _orchestrator_event(
-                event_type="HysteresisDecisionPublished",
+                event_type="HysteresisStatePublished",
                 run_id="run-1",
                 symbol=symbol,
                 engine_timestamp_ms=100,
-                payload=HysteresisDecisionPayload(hysteresis_decision=first_decision),
+                payload=HysteresisStatePayload(hysteresis_state=first_state),
                 engine_mode="hysteresis",
             )
         )
         first_snapshot = builder.build_snapshot(as_of_ts_ms=101)
         assert first_snapshot.symbols[0].hysteresis is not None
-        self.assertIsNone(first_snapshot.symbols[0].hysteresis.summary)
+        self.assertIsNotNone(first_snapshot.symbols[0].hysteresis.summary)
 
         builder.ingest_orchestrator_event(
             _orchestrator_event(
-                event_type="HysteresisDecisionPublished",
+                event_type="HysteresisStatePublished",
                 run_id="run-2",
                 symbol=symbol,
                 engine_timestamp_ms=200,
-                payload=HysteresisDecisionPayload(hysteresis_decision=second_decision),
+                payload=HysteresisStatePayload(hysteresis_state=second_state),
                 engine_mode="hysteresis",
             )
         )
@@ -352,15 +359,15 @@ class TestDashboardBuilder(unittest.TestCase):
         assert summary is not None
         self.assertEqual(summary.progress.required, 3)
         self.assertEqual(summary.progress.current, 3)
-        self.assertEqual(summary.confidence_trend, "RISING")
+        self.assertEqual(summary.confidence_trend, "FLAT")
 
         builder.ingest_orchestrator_event(
             _orchestrator_event(
-                event_type="HysteresisDecisionPublished",
+                event_type="HysteresisStatePublished",
                 run_id="run-3",
                 symbol=symbol,
                 engine_timestamp_ms=300,
-                payload=HysteresisDecisionPayload(hysteresis_decision=third_decision),
+                payload=HysteresisStatePayload(hysteresis_state=third_state),
                 engine_mode="hysteresis",
             )
         )
@@ -369,8 +376,8 @@ class TestDashboardBuilder(unittest.TestCase):
         summary = third_snapshot.symbols[0].hysteresis.summary
         assert summary is not None
         self.assertEqual(summary.progress.required, 3)
-        self.assertEqual(summary.progress.current, 4)
-        self.assertEqual(summary.confidence_trend, "FALLING")
+        self.assertEqual(summary.progress.current, 0)
+        self.assertEqual(summary.confidence_trend, "FLAT")
 
     def test_staleness_signals_missing_inputs(self) -> None:
         builder = DashboardBuilder(time_fn=lambda: 333)
@@ -382,17 +389,14 @@ class TestDashboardBuilder(unittest.TestCase):
     def test_builder_is_deterministic_for_same_event_log(self) -> None:
         symbol = "DET"
         truth_output = _regime_output(symbol=symbol, timestamp=1, regime=Regime.CHOP_BALANCED)
-        hysteresis_decision = HysteresisDecision(
-            selected_output=_regime_output(symbol=symbol, timestamp=2, regime=Regime.SQUEEZE_UP),
-            effective_confidence=0.9,
-            transition=HysteresisTransition(
-                stable_regime=Regime.CHOP_BALANCED,
-                candidate_regime=Regime.SQUEEZE_UP,
-                candidate_count=1,
-                transition_active=False,
-                flipped=True,
-                reset_due_to_gap=False,
-            ),
+        hysteresis_state = _hysteresis_state(
+            symbol=symbol,
+            engine_timestamp_ms=2,
+            anchor_regime=Regime.CHOP_BALANCED,
+            candidate_regime=Regime.SQUEEZE_UP,
+            progress_current=1,
+            progress_required=3,
+            reason_codes=("PROGRESS_RESET",),
         )
 
         orchestrator_completed = _orchestrator_event(
@@ -410,7 +414,7 @@ class TestDashboardBuilder(unittest.TestCase):
             gate_status="OPEN",
             reasons=("go",),
             payload=GateEvaluatedPayload(
-                regime_output=truth_output, hysteresis_decision=hysteresis_decision
+                regime_output=truth_output, hysteresis_state=hysteresis_state
             ),
             engine_mode="hysteresis",
         )

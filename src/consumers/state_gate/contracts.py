@@ -6,7 +6,7 @@ from typing import Literal
 
 from orchestrator.contracts import EngineMode
 from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.hysteresis.decision import HysteresisDecision
+from regime_engine.hysteresis.state import HysteresisState
 
 SCHEMA_NAME = "state_gate_event"
 SCHEMA_VERSION = "1"
@@ -35,9 +35,9 @@ EVENT_TYPES: Sequence[str] = (
 INPUT_EVENT_TYPES: Sequence[str] = (
     "EngineRunCompleted",
     "EngineRunFailed",
-    "HysteresisDecisionPublished",
+    "HysteresisStatePublished",
 )
-InputEventType = Literal["EngineRunCompleted", "EngineRunFailed", "HysteresisDecisionPublished"]
+InputEventType = Literal["EngineRunCompleted", "EngineRunFailed", "HysteresisStatePublished"]
 
 RESET_REASON_TIMESTAMP_GAP = "reset_timestamp_gap"
 RESET_REASON_ENGINE_GAP = "reset_engine_gap"
@@ -60,7 +60,7 @@ REASON_CODES: Sequence[str] = (
 @dataclass(frozen=True)
 class GateEvaluatedPayload:
     regime_output: RegimeOutput | None = None
-    hysteresis_decision: HysteresisDecision | None = None
+    hysteresis_state: HysteresisState | None = None
 
 
 @dataclass(frozen=True)
@@ -104,7 +104,7 @@ class StateGateStateRecord:
     engine_mode: EngineMode | None
     source_event_type: InputEventType | None
     regime_output: RegimeOutput | None = None
-    hysteresis_decision: HysteresisDecision | None = None
+    hysteresis_state: HysteresisState | None = None
     reset_reason: ResetReason | None = None
     error_kind: str | None = None
     error_detail: str | None = None

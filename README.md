@@ -324,7 +324,7 @@ Determinism requirements:
 Public entrypoints:
 
 - `regime_engine.engine.run(snapshot) -> RegimeOutput` (truth API)
-- `regime_engine.engine.run_with_hysteresis(snapshot, state, config) -> HysteresisDecision`
+- `regime_engine.engine.run_with_hysteresis(snapshot, state, config) -> HysteresisState`
 
 Contracts are immutable. Changes require explicit versioning and downstream review.
 
@@ -397,7 +397,7 @@ The state_gate layer materializes a deterministic per-symbol gate over orchestra
 
 What it does:
 
-- Consumes `orchestrator_event` v1 (`EngineRunCompleted`, `EngineRunFailed`, `HysteresisDecisionPublished`)
+- Consumes `orchestrator_event` v1 (`EngineRunCompleted`, `EngineRunFailed`, `HysteresisStatePublished`)
 - Assembles a single authoritative payload per `run_id` (hysteresis wins when present)
 - Applies deterministic resets (`max_gap_ms`, hysteresis `reset_due_to_gap`) before evaluation
 - Evaluates gate status with ordered rules (run failure → CLOSED/DEGRADED; denylisted invalidations → CLOSED/HOLD; transition hold when configured; else OPEN/READY)

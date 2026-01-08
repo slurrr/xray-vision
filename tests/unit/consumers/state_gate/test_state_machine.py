@@ -7,7 +7,7 @@ from consumers.state_gate.contracts import StateResetPayload
 from orchestrator.contracts import ENGINE_MODE_HYSTERESIS, EngineMode
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
-from regime_engine.hysteresis.decision import HysteresisDecision, HysteresisTransition
+from regime_engine.hysteresis.state import SCHEMA_NAME, SCHEMA_VERSION, HysteresisState
 
 
 def _config(max_gap_ms: int = 1000) -> StateGateConfig:
@@ -34,20 +34,19 @@ def _regime_output(symbol: str, timestamp: int) -> RegimeOutput:
     )
 
 
-def _hysteresis_decision(
-    symbol: str, timestamp: int, *, reset_due_to_gap: bool
-) -> HysteresisDecision:
-    return HysteresisDecision(
-        selected_output=_regime_output(symbol=symbol, timestamp=timestamp),
-        effective_confidence=0.5,
-        transition=HysteresisTransition(
-            stable_regime=None,
-            candidate_regime=Regime.CHOP_BALANCED,
-            candidate_count=1,
-            transition_active=False,
-            flipped=False,
-            reset_due_to_gap=reset_due_to_gap,
-        ),
+def _hysteresis_state(symbol: str, timestamp: int) -> HysteresisState:
+    return HysteresisState(
+        schema=SCHEMA_NAME,
+        schema_version=SCHEMA_VERSION,
+        symbol=symbol,
+        engine_timestamp_ms=timestamp,
+        anchor_regime=Regime.CHOP_BALANCED,
+        candidate_regime=None,
+        progress_current=0,
+        progress_required=3,
+        last_commit_timestamp_ms=None,
+        reason_codes=("CANDIDATE_SAME_AS_ANCHOR",),
+        debug=None,
     )
 
 
@@ -59,7 +58,7 @@ def _run_input(
     input_event_type: str,
     engine_mode: EngineMode | None,
     regime_output: RegimeOutput | None = None,
-    hysteresis_decision: HysteresisDecision | None = None,
+    hysteresis_state: HysteresisState | None = None,
 ) -> AssembledRunInput:
     return AssembledRunInput(
         run_id=run_id,
@@ -68,7 +67,7 @@ def _run_input(
         engine_mode=engine_mode,
         input_event_type=input_event_type,  # type: ignore[arg-type]
         regime_output=regime_output,
-        hysteresis_decision=hysteresis_decision,
+        hysteresis_state=hysteresis_state,
     )
 
 
@@ -217,31 +216,28 @@ class TestStateMachine(unittest.TestCase):
         self.assertEqual(snapshot.last_run_id, "run-5")
         self.assertEqual(snapshot.state_status, "READY")
 
-    def test_hysteresis_reset_due_to_gap(self) -> None:
+    def test_hysteresis_runs_do_not_force_reset(self) -> None:
         machine = StateGateStateMachine(config=_config(max_gap_ms=10))
-        decision = _hysteresis_decision(symbol="TEST", timestamp=300, reset_due_to_gap=True)
+        state = _hysteresis_state(symbol="TEST", timestamp=300)
         run = _run_input(
             "run-6",
             symbol="TEST",
             engine_timestamp_ms=300,
-            input_event_type="HysteresisDecisionPublished",
+            input_event_type="HysteresisStatePublished",
             engine_mode=ENGINE_MODE_HYSTERESIS,
-            hysteresis_decision=decision,
+            hysteresis_state=state,
         )
         evaluation = GateEvaluation(
-            gate_status="CLOSED",
-            state_status="HOLD",
-            reasons=["transition_active"],
-            input_event_type="HysteresisDecisionPublished",
+            gate_status="OPEN",
+            state_status="READY",
+            reasons=[],
+            input_event_type="HysteresisStatePublished",
             engine_mode=ENGINE_MODE_HYSTERESIS,
-            hysteresis_decision=decision,
+            hysteresis_state=state,
         )
 
         events = machine.process_run(run, evaluation)
-        self.assertEqual([event.event_type for event in events], ["StateReset", "GateEvaluated"])
-        assert isinstance(events[0].payload, StateResetPayload)
-        self.assertEqual(events[0].payload.reset_reason, "reset_engine_gap")
-        self.assertEqual(events[1].state_status, "HOLD")
+        self.assertEqual([event.event_type for event in events], ["GateEvaluated"])
 
 
 if __name__ == "__main__":

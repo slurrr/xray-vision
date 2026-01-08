@@ -36,12 +36,12 @@ from orchestrator.contracts import (
 )
 from orchestrator.contracts import (
     EngineRunCompletedPayload,
-    HysteresisDecisionPayload,
+    HysteresisStatePayload,
     OrchestratorEvent,
 )
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
-from regime_engine.hysteresis.decision import HysteresisDecision
+from regime_engine.hysteresis.state import HysteresisState
 
 from .contracts import (
     CONFIDENCE_TREND_FALLING,
@@ -130,6 +130,7 @@ class _SymbolState:
     metrics: MetricsSnapshot | None = None
     last_run_id: str | None = None
     last_engine_timestamp_ms: int | None = None
+    hysteresis_progress_required: int | None = None
     previous_progress_required: int | None = None
     previous_effective_confidence: float | None = None
 
@@ -183,17 +184,21 @@ class DashboardBuilder:
                     )
                     symbol_state.regime_truth_ts = event.engine_timestamp_ms
 
-            if event.event_type == "HysteresisDecisionPublished" and isinstance(
-                event.payload, HysteresisDecisionPayload
+            if event.event_type == "HysteresisStatePublished" and isinstance(
+                event.payload, HysteresisStatePayload
             ):
                 if (
                     symbol_state.hysteresis_ts is None
                     or event.engine_timestamp_ms >= symbol_state.hysteresis_ts
                 ):
-                    symbol_state.hysteresis = _hysteresis_snapshot_from_decision(
-                        event.payload.hysteresis_decision
+                    symbol_state.hysteresis = _hysteresis_snapshot_from_state(
+                        event.payload.hysteresis_state,
+                        effective_confidence=None,
                     )
                     symbol_state.hysteresis_ts = event.engine_timestamp_ms
+                    symbol_state.hysteresis_progress_required = (
+                        event.payload.hysteresis_state.progress_required
+                    )
         except Exception as exc:  # pragma: no cover - defensive guard
             self._record_ingest_failure(
                 input_schema=event.schema,
@@ -239,9 +244,13 @@ class DashboardBuilder:
                     symbol_state.regime_effective = effective
                     symbol_state.regime_effective_ts = event.engine_timestamp_ms
 
-                if event.payload.hysteresis_decision is not None:
-                    hysteresis_snapshot = _hysteresis_snapshot_from_decision(
-                        event.payload.hysteresis_decision
+                if event.payload.hysteresis_state is not None:
+                    effective_confidence = None
+                    if event.payload.regime_output is not None:
+                        effective_confidence = event.payload.regime_output.confidence
+                    hysteresis_snapshot = _hysteresis_snapshot_from_state(
+                        event.payload.hysteresis_state,
+                        effective_confidence=effective_confidence,
                     )
                     if (
                         symbol_state.hysteresis_ts is None
@@ -249,6 +258,9 @@ class DashboardBuilder:
                     ):
                         symbol_state.hysteresis = hysteresis_snapshot
                         symbol_state.hysteresis_ts = event.engine_timestamp_ms
+                        symbol_state.hysteresis_progress_required = (
+                            event.payload.hysteresis_state.progress_required
+                        )
         except Exception as exc:  # pragma: no cover - defensive guard
             self._record_ingest_failure(
                 input_schema=event.schema,
@@ -410,12 +422,7 @@ class DashboardBuilder:
             return None
 
         transition = symbol_state.hysteresis.transition
-        progress_required = None
-        if transition.flipped:
-            progress_required = transition.candidate_count
-        elif symbol_state.previous_progress_required is not None:
-            progress_required = symbol_state.previous_progress_required
-
+        progress_required = symbol_state.hysteresis_progress_required
         if progress_required is None:
             return None
 
@@ -547,10 +554,6 @@ class DashboardBuilder:
         symbol_state.previous_effective_confidence = (
             hysteresis_snapshot.effective_confidence if hysteresis_snapshot is not None else None
         )
-        if hysteresis_snapshot is None or hysteresis_snapshot.summary is None:
-            symbol_state.previous_progress_required = None
-            return
-        symbol_state.previous_progress_required = hysteresis_snapshot.summary.progress.required
 
     def _symbol_state(self, symbol: str) -> _SymbolState:
         if symbol not in self._symbols:
@@ -635,11 +638,14 @@ def _regime_effective_from_payload(
 ) -> RegimeEffectiveSnapshot | None:
     if engine_mode == "truth" and payload.regime_output is not None:
         return _regime_effective_from_output(payload.regime_output, source="truth")
-    if engine_mode == "hysteresis" and payload.hysteresis_decision is not None:
+    if (
+        engine_mode == "hysteresis"
+        and payload.hysteresis_state is not None
+        and payload.regime_output is not None
+    ):
         return _regime_effective_from_output(
-            payload.hysteresis_decision.selected_output,
+            payload.regime_output,
             source="hysteresis",
-            effective_confidence=payload.hysteresis_decision.effective_confidence,
         )
     return None
 
@@ -661,17 +667,21 @@ def _regime_effective_from_output(
     )
 
 
-def _hysteresis_snapshot_from_decision(decision: HysteresisDecision) -> HysteresisSnapshot:
-    transition = decision.transition
+def _hysteresis_snapshot_from_state(
+    state: HysteresisState, *, effective_confidence: float | None
+) -> HysteresisSnapshot:
+    transition_active = state.progress_current > 0
+    flipped = any(code.startswith("COMMIT_SWITCH:") for code in state.reason_codes)
+    confidence = effective_confidence if effective_confidence is not None else 0.0
     return HysteresisSnapshot(
-        effective_confidence=decision.effective_confidence,
+        effective_confidence=confidence,
         transition=HysteresisTransition(
-            stable_regime=_regime_value(transition.stable_regime),
-            candidate_regime=_regime_value(transition.candidate_regime),
-            candidate_count=transition.candidate_count,
-            transition_active=transition.transition_active,
-            flipped=transition.flipped,
-            reset_due_to_gap=transition.reset_due_to_gap,
+            stable_regime=_regime_value(state.anchor_regime),
+            candidate_regime=_regime_value(state.candidate_regime),
+            candidate_count=state.progress_current,
+            transition_active=transition_active,
+            flipped=flipped,
+            reset_due_to_gap=False,
         ),
     )
 

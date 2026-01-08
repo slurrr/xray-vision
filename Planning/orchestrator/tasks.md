@@ -44,7 +44,7 @@ This task list is ordered and implementation-ready. Complete tasks strictly in o
    - `EngineRunStarted`
    - `EngineRunCompleted` (with `RegimeOutput`)
    - `EngineRunFailed`
-   - `HysteresisDecisionPublished` (when enabled)
+   - `HysteresisStatePublished` (when enabled)
 19. Ensure per-symbol ordering of published outputs by `engine_timestamp_ms` with at-least-once delivery semantics.
 
 ## Phase 5 — Failure Handling + Backpressure (Domain-Explicit)

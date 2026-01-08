@@ -7,7 +7,7 @@
 - Envelope fields `event_type`, `symbol`, `engine_timestamp_ms`, and `run_id` are required.
 - State payload fields `state_status`, `gate_status`, and `reasons` are required.
 - `payload` attachment keys follow the event type contracts:
-  - `GateEvaluated`: `regime_output` and/or `hysteresis_decision`
+  - `GateEvaluated`: `regime_output` and/or `hysteresis_state`
   - `StateReset`: `reset_reason`
   - `StateGateHalted`: `error_kind`, `error_detail`
 - Optional metadata fields (`input_event_type`, `engine_mode`) are additive only.
@@ -18,7 +18,7 @@
   - `symbol`, `engine_timestamp_ms`, `run_id`
   - `state_status`, `gate_status`, `reasons`
   - `engine_mode`, `source_event_type`
-- Optional attachments mirror the event payloads (`regime_output`, `hysteresis_decision`, `reset_reason`, `error_kind`, `error_detail`).
+- Optional attachments mirror the event payloads (`regime_output`, `hysteresis_state`, `reset_reason`, `error_kind`, `error_detail`).
 
 ## Snapshot cache contract
 

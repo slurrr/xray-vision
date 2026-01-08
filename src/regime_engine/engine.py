@@ -11,11 +11,11 @@ from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.snapshots import RegimeInputSnapshot
 from regime_engine.hysteresis import (
     HysteresisConfig,
-    HysteresisDecision,
+    HysteresisState,
     HysteresisStore,
-    process_output,
+    process_state,
 )
-from regime_engine.pipeline import run_pipeline
+from regime_engine.pipeline import run_pipeline, run_pipeline_with_state
 
 
 def run(snapshot: RegimeInputSnapshot) -> RegimeOutput:
@@ -26,6 +26,6 @@ def run_with_hysteresis(
     snapshot: RegimeInputSnapshot,
     state: HysteresisStore,
     config: HysteresisConfig | None = None,
-) -> HysteresisDecision:
-    output = run(snapshot)
-    return process_output(output, store=state, config=config)
+) -> HysteresisState:
+    _output, regime_state = run_pipeline_with_state(snapshot)
+    return process_state(regime_state, store=state, config=config)

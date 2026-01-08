@@ -125,7 +125,7 @@ Renderers output presentation only (TUI in v1; browser/web UI in future). Render
       - `permissions`: array of strings
   - `hysteresis` (optional; decision state, render-only):
     - Intent: represent hysteresis transition state as observed, without converting it into “effective regime” fields.
-    - Source: `orchestrator_event.HysteresisDecisionPublished.payload.hysteresis_decision` when available.
+    - Source: `orchestrator_event.HysteresisStatePublished.payload.hysteresis_state` when available.
     - Fields:
       - `effective_confidence`: number
       - `transition`:
@@ -152,9 +152,8 @@ Renderers output presentation only (TUI in v1; browser/web UI in future). Render
             - `current`: int (copy of `transition.candidate_count`)
             - `required`: int (required persistence count)
               - Derivation rule (no inference, no new thresholds):
-                - If `transition.flipped == true`, set `required = progress.current` (the observed persistence count at which a flip occurred).
-                - Else if the previous DVM snapshot for the same symbol contains `hysteresis.summary.progress.required`, carry it forward unchanged.
-                - Else omit `summary` (do not invent a value).
+                - Use the hysteresis state `progress_required` for the current symbol.
+                - If unavailable, omit `summary` (do not invent a value).
           - `confidence_trend`: string (`RISING` | `FALLING` | `FLAT`)
             - Derivation rule: compare current `hysteresis.effective_confidence` to the previous DVM snapshot’s `hysteresis.effective_confidence` for the same symbol:
               - greater → `RISING`
@@ -162,19 +161,19 @@ Renderers output presentation only (TUI in v1; browser/web UI in future). Render
               - equal → `FLAT`
             - If a previous value is unavailable, set `FLAT`.
           - `notes`: array of strings (optional; stable reason codes; deterministic ordering)
-            - Allowed values (v1): `reset_due_to_gap`, `flipped`
-            - Population rule: include `reset_due_to_gap` if `transition.reset_due_to_gap == true`; include `flipped` if `transition.flipped == true`; sort lexicographically.
+            - Allowed values (v1): `flipped`
+            - Population rule: include `flipped` if `transition.flipped == true`; sort lexicographically.
   - `regime_effective` (optional; effective regime exposed downstream, render-only):
     - Intent: represent the single effective regime that downstream consumption should treat as current.
     - Source: `state_gate_event` authoritative payload when available:
       - in truth mode: `payload.regime_output`
-      - in hysteresis mode: `payload.hysteresis_decision.selected_output`
+      - in hysteresis mode: `payload.regime_output` when present (omit if unavailable)
     - Fields:
       - `regime_name`: string
       - `confidence`: number
         - Mapping rule (no computation):
           - truth mode: copy `payload.regime_output.confidence`
-          - hysteresis mode: copy `payload.hysteresis_decision.effective_confidence`
+          - hysteresis mode: copy `payload.regime_output.confidence` when present
       - `drivers`: array of strings
       - `invalidations`: array of strings
       - `permissions`: array of strings

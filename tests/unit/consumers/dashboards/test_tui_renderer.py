@@ -27,12 +27,12 @@ from orchestrator.contracts import SCHEMA_NAME as ORCHESTRATOR_SCHEMA
 from orchestrator.contracts import SCHEMA_VERSION as ORCHESTRATOR_SCHEMA_VERSION
 from orchestrator.contracts import (
     EngineRunCompletedPayload,
-    HysteresisDecisionPayload,
+    HysteresisStatePayload,
     OrchestratorEvent,
 )
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
-from regime_engine.hysteresis.decision import HysteresisDecision, HysteresisTransition
+from regime_engine.hysteresis.state import SCHEMA_NAME, SCHEMA_VERSION, HysteresisState
 
 
 def _regime_output(symbol: str, timestamp: int, regime: Regime) -> RegimeOutput:
@@ -44,6 +44,22 @@ def _regime_output(symbol: str, timestamp: int, regime: Regime) -> RegimeOutput:
         drivers=["d1"],
         invalidations=["i1"],
         permissions=["p1"],
+    )
+
+
+def _hysteresis_state(symbol: str, timestamp: int) -> HysteresisState:
+    return HysteresisState(
+        schema=SCHEMA_NAME,
+        schema_version=SCHEMA_VERSION,
+        symbol=symbol,
+        engine_timestamp_ms=timestamp,
+        anchor_regime=Regime.CHOP_BALANCED,
+        candidate_regime=Regime.SQUEEZE_UP,
+        progress_current=2,
+        progress_required=2,
+        last_commit_timestamp_ms=None,
+        reason_codes=("COMMIT_SWITCH:CHOP_BALANCED->SQUEEZE_UP",),
+        debug=None,
     )
 
 
@@ -121,18 +137,7 @@ class TestTuiRenderer(unittest.TestCase):
         symbol = "SYM"
         builder = DashboardBuilder(time_fn=lambda: 300)
         truth_output = _regime_output(symbol, 100, Regime.CHOP_BALANCED)
-        hysteresis_decision = HysteresisDecision(
-            selected_output=_regime_output(symbol, 150, Regime.SQUEEZE_UP),
-            effective_confidence=0.5,
-            transition=HysteresisTransition(
-                stable_regime=Regime.CHOP_BALANCED,
-                candidate_regime=Regime.SQUEEZE_UP,
-                candidate_count=2,
-                transition_active=True,
-                flipped=True,
-                reset_due_to_gap=False,
-            ),
-        )
+        hysteresis_state = _hysteresis_state(symbol, 150)
 
         builder.ingest_orchestrator_event(
             OrchestratorEvent(
@@ -153,7 +158,7 @@ class TestTuiRenderer(unittest.TestCase):
             OrchestratorEvent(
                 schema=ORCHESTRATOR_SCHEMA,
                 schema_version=ORCHESTRATOR_SCHEMA_VERSION,
-                event_type="HysteresisDecisionPublished",
+                event_type="HysteresisStatePublished",
                 run_id="run-2",
                 symbol=symbol,
                 engine_timestamp_ms=150,
@@ -161,7 +166,7 @@ class TestTuiRenderer(unittest.TestCase):
                 cut_end_ingest_seq=1,
                 cut_kind="timer",
                 engine_mode="hysteresis",
-                payload=HysteresisDecisionPayload(hysteresis_decision=hysteresis_decision),
+                payload=HysteresisStatePayload(hysteresis_state=hysteresis_state),
             )
         )
         builder.ingest_state_gate_event(
@@ -176,9 +181,9 @@ class TestTuiRenderer(unittest.TestCase):
                 gate_status="OPEN",
                 reasons=("ready",),
                 payload=GateEvaluatedPayload(
-                    regime_output=truth_output, hysteresis_decision=hysteresis_decision
+                    regime_output=truth_output, hysteresis_state=hysteresis_state
                 ),
-                input_event_type="HysteresisDecisionPublished",
+                input_event_type="HysteresisStatePublished",
                 engine_mode="hysteresis",
             )
         )

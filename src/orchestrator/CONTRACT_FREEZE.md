@@ -24,14 +24,14 @@ Optional metadata (additive only):
 Payload (per event type):
 - EngineRunCompleted: payload.regime_output (RegimeOutput)
 - EngineRunFailed: payload.error_kind, payload.error_detail
-- HysteresisDecisionPublished: payload.hysteresis_decision
+- HysteresisStatePublished: payload.hysteresis_state
 
 ## Supported v1 event_type list
 
 - EngineRunStarted
 - EngineRunCompleted
 - EngineRunFailed
-- HysteresisDecisionPublished
+- HysteresisStatePublished
 
 ## Minimal config (single symbol end-to-end)
 

@@ -16,7 +16,7 @@ from orchestrator.contracts import (
 )
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
-from regime_engine.hysteresis.decision import HysteresisDecision, HysteresisTransition
+from regime_engine.hysteresis.state import SCHEMA_NAME, SCHEMA_VERSION, HysteresisState
 
 
 def _config(**overrides) -> StateGateConfig:
@@ -45,23 +45,25 @@ def _regime_output(
     )
 
 
-def _hysteresis_decision(
+def _hysteresis_state(
     symbol: str,
     timestamp: int,
     *,
     transition_active: bool,
-) -> HysteresisDecision:
-    return HysteresisDecision(
-        selected_output=_regime_output(symbol, timestamp),
-        effective_confidence=0.5,
-        transition=HysteresisTransition(
-            stable_regime=None,
-            candidate_regime=Regime.CHOP_BALANCED,
-            candidate_count=1,
-            transition_active=transition_active,
-            flipped=False,
-            reset_due_to_gap=False,
-        ),
+) -> HysteresisState:
+    progress = 1 if transition_active else 0
+    return HysteresisState(
+        schema=SCHEMA_NAME,
+        schema_version=SCHEMA_VERSION,
+        symbol=symbol,
+        engine_timestamp_ms=timestamp,
+        anchor_regime=Regime.CHOP_BALANCED,
+        candidate_regime=Regime.SQUEEZE_UP if transition_active else None,
+        progress_current=progress,
+        progress_required=3,
+        last_commit_timestamp_ms=None,
+        reason_codes=("PROGRESS_RESET",) if transition_active else ("CANDIDATE_SAME_AS_ANCHOR",),
+        debug=None,
     )
 
 
@@ -73,7 +75,7 @@ def _assembled_run(
     input_event_type: str,
     engine_mode: EngineMode | None,
     regime_output: RegimeOutput | None = None,
-    hysteresis_decision: HysteresisDecision | None = None,
+    hysteresis_state: HysteresisState | None = None,
 ) -> AssembledRunInput:
     return AssembledRunInput(
         run_id=run_id,
@@ -82,7 +84,7 @@ def _assembled_run(
         engine_mode=engine_mode,
         input_event_type=input_event_type,  # type: ignore[arg-type]
         regime_output=regime_output,
-        hysteresis_decision=hysteresis_decision,
+        hysteresis_state=hysteresis_state,
     )
 
 
@@ -139,20 +141,20 @@ class TestGateEvaluation(unittest.TestCase):
 
     def test_transition_hold_blocks_when_configured(self) -> None:
         evaluator = GateEvaluator(config=_config(block_during_transition=True))
-        decision = _hysteresis_decision("TEST", 100, transition_active=True)
+        state = _hysteresis_state("TEST", 100, transition_active=True)
         run = _assembled_run(
             "run-3",
             symbol="TEST",
             engine_timestamp_ms=100,
-            input_event_type="HysteresisDecisionPublished",
+            input_event_type="HysteresisStatePublished",
             engine_mode="hysteresis",
-            hysteresis_decision=decision,
+            hysteresis_state=state,
         )
         evaluation = evaluator.evaluate(run)
         self.assertEqual(evaluation.gate_status, "CLOSED")
         self.assertEqual(evaluation.state_status, "HOLD")
         self.assertEqual(evaluation.reasons, ["transition_active"])
-        self.assertIsNotNone(evaluation.hysteresis_decision)
+        self.assertIsNotNone(evaluation.hysteresis_state)
 
     def test_open_gate_by_default(self) -> None:
         evaluator = GateEvaluator(config=_config())

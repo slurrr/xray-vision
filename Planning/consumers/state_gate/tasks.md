@@ -18,7 +18,7 @@ This task list is ordered and implementation-ready. Complete tasks strictly in o
 
 6. Implement consumption of the `orchestrator_event` v1 stream with at-least-once semantics.
 7. Implement per-run assembly keyed by `run_id` to support deterministic input selection:
-   - recognize `EngineRunCompleted`, `EngineRunFailed`, `HysteresisDecisionPublished`
+   - recognize `EngineRunCompleted`, `EngineRunFailed`, `HysteresisStatePublished`
    - ensure duplicate inputs do not produce duplicate decisions
 8. Implement per-symbol ordering safeguards (strictly increasing `engine_timestamp_ms` for state mutation; ignore older runs as replay).
 

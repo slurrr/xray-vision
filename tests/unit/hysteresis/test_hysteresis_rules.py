@@ -1,149 +1,273 @@
 import unittest
 
-from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
-from regime_engine.hysteresis import HysteresisConfig, HysteresisError, apply_hysteresis
-from regime_engine.hysteresis.state import HysteresisState
+from regime_engine.hysteresis.rules import advance_hysteresis, select_candidate
+from regime_engine.hysteresis.state import (
+    SCHEMA_NAME,
+    SCHEMA_VERSION,
+    HysteresisConfig,
+    HysteresisState,
+)
+from regime_engine.state.state import RegimeState
 
 
-def _output(regime: Regime, timestamp: int, confidence: float = 0.8) -> RegimeOutput:
-    return RegimeOutput(
-        symbol="TEST",
-        timestamp=timestamp,
-        regime=regime,
-        confidence=confidence,
-        drivers=["driver"],
-        invalidations=["invalid"],
-        permissions=["perm"],
+def _belief(values: dict[Regime, float]) -> dict[Regime, float]:
+    belief = {regime: 0.0 for regime in Regime}
+    belief.update(values)
+    return belief
+
+
+def _regime_state(
+    *,
+    symbol: str,
+    engine_timestamp_ms: int,
+    anchor_regime: Regime,
+    belief_by_regime: dict[Regime, float],
+) -> RegimeState:
+    return RegimeState(
+        schema="regime_state",
+        schema_version="1",
+        symbol=symbol,
+        engine_timestamp_ms=engine_timestamp_ms,
+        belief_by_regime=belief_by_regime,
+        anchor_regime=anchor_regime,
     )
 
 
-class TestHysteresisRules(unittest.TestCase):
-    def test_initial_output_sets_stable(self) -> None:
-        config = HysteresisConfig()
-        state = HysteresisState()
-        output = _output(Regime.CHOP_BALANCED, 180_000, 0.9)
+def _hysteresis_state(
+    *,
+    symbol: str,
+    engine_timestamp_ms: int,
+    anchor_regime: Regime,
+    candidate_regime: Regime | None,
+    progress_current: int,
+    progress_required: int,
+    reason_codes: tuple[str, ...] = (),
+    last_commit_timestamp_ms: int | None = None,
+) -> HysteresisState:
+    return HysteresisState(
+        schema=SCHEMA_NAME,
+        schema_version=SCHEMA_VERSION,
+        symbol=symbol,
+        engine_timestamp_ms=engine_timestamp_ms,
+        anchor_regime=anchor_regime,
+        candidate_regime=candidate_regime,
+        progress_current=progress_current,
+        progress_required=progress_required,
+        last_commit_timestamp_ms=last_commit_timestamp_ms,
+        reason_codes=reason_codes,
+        debug=None,
+    )
 
-        decision, next_state = apply_hysteresis(output, state=state, config=config)
 
-        self.assertEqual(decision.selected_output, output)
-        self.assertEqual(decision.effective_confidence, 0.9)
-        self.assertFalse(decision.transition.transition_active)
-        self.assertEqual(decision.transition.stable_regime, Regime.CHOP_BALANCED)
-        self.assertEqual(decision.transition.candidate_count, 0)
-        self.assertEqual(next_state.stable_output, output)
+class TestBeliefHysteresis(unittest.TestCase):
+    def test_tie_breaking_is_stable(self) -> None:
+        belief = _belief(
+            {
+                Regime.CHOP_BALANCED: 0.5,
+                Regime.CHOP_STOPHUNT: 0.5,
+            }
+        )
+        candidate = select_candidate(belief, Regime.CHOP_STOPHUNT, allowed_regimes=None)
+        self.assertEqual(candidate, Regime.CHOP_BALANCED)
 
-    def test_rejects_non_increasing_timestamp(self) -> None:
-        config = HysteresisConfig()
-        state = HysteresisState(last_timestamp=180_000)
-        output = _output(Regime.CHOP_BALANCED, 180_000, 0.9)
+    def test_candidate_flip_flop_decays_progress(self) -> None:
+        config = HysteresisConfig(window_updates=3, enter_threshold=0.6, commit_threshold=0.6)
+        prev = _hysteresis_state(
+            symbol="TEST",
+            engine_timestamp_ms=0,
+            anchor_regime=Regime.CHOP_BALANCED,
+            candidate_regime=None,
+            progress_current=0,
+            progress_required=3,
+        )
+        state_a = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=100,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.SQUEEZE_UP: 0.6, Regime.CHOP_BALANCED: 0.4}),
+        )
+        first = advance_hysteresis(prev, state_a, config)
+        self.assertEqual(first.candidate_regime, Regime.SQUEEZE_UP)
+        self.assertEqual(first.progress_current, 1)
 
-        with self.assertRaises(HysteresisError):
-            apply_hysteresis(output, state=state, config=config)
+        state_b = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=200,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.CHOP_BALANCED: 1.0}),
+        )
+        second = advance_hysteresis(first, state_b, config)
+        self.assertIsNone(second.candidate_regime)
+        self.assertEqual(second.progress_current, 0)
 
-    def test_gap_resets_state(self) -> None:
-        config = HysteresisConfig()
-        state = HysteresisState(
-            stable_output=_output(Regime.CHOP_BALANCED, 180_000, 0.9),
+    def test_lead_gating_blocks_candidate(self) -> None:
+        config = HysteresisConfig(
+            window_updates=3,
+            enter_threshold=0.5,
+            commit_threshold=0.5,
+            min_lead_over_anchor=0.2,
+        )
+        prev = _hysteresis_state(
+            symbol="TEST",
+            engine_timestamp_ms=0,
+            anchor_regime=Regime.CHOP_BALANCED,
+            candidate_regime=None,
+            progress_current=0,
+            progress_required=3,
+        )
+        state = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=100,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.SQUEEZE_UP: 0.55, Regime.CHOP_BALANCED: 0.45}),
+        )
+        updated = advance_hysteresis(prev, state, config)
+        self.assertIsNone(updated.candidate_regime)
+        self.assertIn("GATE_FAIL_MIN_LEAD", updated.reason_codes)
+
+    def test_commit_blocked_when_belief_below_threshold(self) -> None:
+        config = HysteresisConfig(window_updates=2, enter_threshold=0.5, commit_threshold=0.8)
+        prev = _hysteresis_state(
+            symbol="TEST",
+            engine_timestamp_ms=100,
+            anchor_regime=Regime.CHOP_BALANCED,
             candidate_regime=Regime.SQUEEZE_UP,
-            candidate_count=2,
-            last_timestamp=180_000,
+            progress_current=1,
+            progress_required=2,
         )
-        output = _output(Regime.SQUEEZE_UP, 360_001, 0.7)
+        state = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=200,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.SQUEEZE_UP: 0.7, Regime.CHOP_BALANCED: 0.3}),
+        )
+        updated = advance_hysteresis(prev, state, config)
+        self.assertEqual(updated.anchor_regime, Regime.CHOP_BALANCED)
+        self.assertEqual(updated.candidate_regime, Regime.SQUEEZE_UP)
+        self.assertEqual(updated.progress_current, 2)
+        self.assertIn("COMMIT_BLOCKED_THRESHOLD", updated.reason_codes)
 
-        decision, next_state = apply_hysteresis(output, state=state, config=config)
+    def test_commit_switches_anchor(self) -> None:
+        config = HysteresisConfig(window_updates=2, enter_threshold=0.5, commit_threshold=0.6)
+        prev = _hysteresis_state(
+            symbol="TEST",
+            engine_timestamp_ms=100,
+            anchor_regime=Regime.CHOP_BALANCED,
+            candidate_regime=Regime.SQUEEZE_UP,
+            progress_current=1,
+            progress_required=2,
+        )
+        state = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=200,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.SQUEEZE_UP: 0.6, Regime.CHOP_BALANCED: 0.4}),
+        )
+        updated = advance_hysteresis(prev, state, config)
+        self.assertEqual(updated.anchor_regime, Regime.SQUEEZE_UP)
+        self.assertIsNone(updated.candidate_regime)
+        self.assertEqual(updated.progress_current, 0)
+        self.assertEqual(updated.last_commit_timestamp_ms, 200)
 
-        self.assertEqual(decision.selected_output, output)
-        self.assertTrue(decision.transition.reset_due_to_gap)
-        self.assertFalse(decision.transition.transition_active)
-        self.assertEqual(next_state.stable_output, output)
-        self.assertEqual(next_state.candidate_count, 0)
-
-    def test_transition_holds_stable_with_decay(self) -> None:
-        config = HysteresisConfig()
-        stable = _output(Regime.CHOP_BALANCED, 180_000, 0.9)
-        state = HysteresisState(
-            stable_output=stable,
+    def test_idempotence(self) -> None:
+        config = HysteresisConfig(window_updates=2, enter_threshold=0.5, commit_threshold=0.6)
+        prev = _hysteresis_state(
+            symbol="TEST",
+            engine_timestamp_ms=100,
+            anchor_regime=Regime.CHOP_BALANCED,
             candidate_regime=None,
-            candidate_count=0,
-            last_timestamp=180_000,
+            progress_current=0,
+            progress_required=2,
         )
+        state = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=200,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.SQUEEZE_UP: 0.6, Regime.CHOP_BALANCED: 0.4}),
+        )
+        first = advance_hysteresis(prev, state, config)
+        second = advance_hysteresis(prev, state, config)
+        self.assertEqual(first, second)
 
-        output = _output(Regime.SQUEEZE_UP, 360_000, 0.5)
-        decision, next_state = apply_hysteresis(output, state=state, config=config)
+    def test_progress_bounds(self) -> None:
+        config = HysteresisConfig(window_updates=3, enter_threshold=0.5, commit_threshold=0.6)
+        prev = _hysteresis_state(
+            symbol="TEST",
+            engine_timestamp_ms=100,
+            anchor_regime=Regime.CHOP_BALANCED,
+            candidate_regime=Regime.SQUEEZE_UP,
+            progress_current=5,
+            progress_required=3,
+        )
+        state = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=200,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.SQUEEZE_UP: 0.6, Regime.CHOP_BALANCED: 0.4}),
+        )
+        updated = advance_hysteresis(prev, state, config)
+        self.assertLessEqual(updated.progress_current, config.window_updates)
 
-        self.assertEqual(decision.selected_output, stable)
-        self.assertTrue(decision.transition.transition_active)
-        self.assertEqual(decision.transition.candidate_count, 1)
-        self.assertAlmostEqual(decision.effective_confidence, 0.9 * 0.85)
-        self.assertEqual(next_state.candidate_regime, Regime.SQUEEZE_UP)
-
-        output = _output(Regime.SQUEEZE_UP, 540_000, 0.5)
-        decision, next_state = apply_hysteresis(output, state=next_state, config=config)
-        self.assertEqual(decision.selected_output, stable)
-        self.assertEqual(decision.transition.candidate_count, 2)
-        self.assertAlmostEqual(decision.effective_confidence, 0.9 * 0.85**2)
-
-    def test_flip_accepts_after_persistence_and_confidence(self) -> None:
-        config = HysteresisConfig()
-        stable = _output(Regime.CHOP_BALANCED, 180_000, 0.9)
-        state = HysteresisState(
-            stable_output=stable,
+    def test_reason_codes_sequence(self) -> None:
+        config = HysteresisConfig(window_updates=2, enter_threshold=0.5, commit_threshold=0.6)
+        prev = _hysteresis_state(
+            symbol="TEST",
+            engine_timestamp_ms=0,
+            anchor_regime=Regime.CHOP_BALANCED,
             candidate_regime=None,
-            candidate_count=0,
-            last_timestamp=180_000,
+            progress_current=0,
+            progress_required=2,
         )
+        state = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=100,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.SQUEEZE_UP: 0.6, Regime.CHOP_BALANCED: 0.4}),
+        )
+        updated = advance_hysteresis(prev, state, config)
+        self.assertIn("CANDIDATE_SELECTED:SQUEEZE_UP", updated.reason_codes)
+        self.assertIn("PROGRESS_RESET", updated.reason_codes)
 
-        output = _output(Regime.SQUEEZE_UP, 360_000, 0.7)
-        _, state = apply_hysteresis(output, state=state, config=config)
-        output = _output(Regime.SQUEEZE_UP, 540_000, 0.7)
-        _, state = apply_hysteresis(output, state=state, config=config)
-        output = _output(Regime.SQUEEZE_UP, 720_000, 0.7)
-
-        decision, next_state = apply_hysteresis(output, state=state, config=config)
-
-        self.assertEqual(decision.selected_output, output)
-        self.assertTrue(decision.transition.flipped)
-        self.assertFalse(decision.transition.transition_active)
-        self.assertEqual(decision.effective_confidence, 0.7)
-        self.assertEqual(next_state.stable_output, output)
-        self.assertEqual(next_state.candidate_count, 0)
-
-    def test_reversion_resets_candidate(self) -> None:
-        config = HysteresisConfig()
-        stable = _output(Regime.CHOP_BALANCED, 180_000, 0.9)
-        state = HysteresisState(
-            stable_output=stable,
+    def test_reason_codes_commit_switch(self) -> None:
+        config = HysteresisConfig(window_updates=1, enter_threshold=0.5, commit_threshold=0.5)
+        prev = _hysteresis_state(
+            symbol="TEST",
+            engine_timestamp_ms=0,
+            anchor_regime=Regime.CHOP_BALANCED,
             candidate_regime=None,
-            candidate_count=0,
-            last_timestamp=180_000,
+            progress_current=0,
+            progress_required=1,
+        )
+        state = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=100,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.SQUEEZE_UP: 0.6, Regime.CHOP_BALANCED: 0.4}),
+        )
+        updated = advance_hysteresis(prev, state, config)
+        self.assertTrue(
+            any(code.startswith("COMMIT_SWITCH:") for code in updated.reason_codes)
         )
 
-        output = _output(Regime.SQUEEZE_UP, 360_000, 0.5)
-        _, state = apply_hysteresis(output, state=state, config=config)
-
-        output = _output(Regime.CHOP_BALANCED, 540_000, 0.9)
-        decision, next_state = apply_hysteresis(output, state=state, config=config)
-
-        self.assertEqual(decision.selected_output, output)
-        self.assertFalse(decision.transition.transition_active)
-        self.assertEqual(next_state.candidate_count, 0)
-        self.assertIsNone(next_state.candidate_regime)
-
-    def test_confidence_decay_floor(self) -> None:
-        config = HysteresisConfig(min_confidence_floor=0.2)
-        stable = _output(Regime.CHOP_BALANCED, 180_000, 0.2)
-        state = HysteresisState(
-            stable_output=stable,
+    def test_reason_codes_no_candidate(self) -> None:
+        config = HysteresisConfig(window_updates=2, enter_threshold=0.5, commit_threshold=0.6)
+        prev = _hysteresis_state(
+            symbol="TEST",
+            engine_timestamp_ms=0,
+            anchor_regime=Regime.CHOP_BALANCED,
             candidate_regime=None,
-            candidate_count=0,
-            last_timestamp=180_000,
+            progress_current=0,
+            progress_required=2,
         )
-
-        output = _output(Regime.SQUEEZE_UP, 360_000, 0.5)
-        decision, _ = apply_hysteresis(output, state=state, config=config)
-
-        self.assertEqual(decision.effective_confidence, 0.2)
+        state = _regime_state(
+            symbol="TEST",
+            engine_timestamp_ms=100,
+            anchor_regime=Regime.CHOP_BALANCED,
+            belief_by_regime=_belief({Regime.CHOP_BALANCED: 1.0}),
+        )
+        updated = advance_hysteresis(prev, state, config)
+        self.assertIn("CANDIDATE_SAME_AS_ANCHOR", updated.reason_codes)
 
 
 if __name__ == "__main__":

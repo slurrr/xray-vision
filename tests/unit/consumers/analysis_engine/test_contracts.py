@@ -21,7 +21,9 @@ from consumers.analysis_engine import (
 )
 from regime_engine.contracts.outputs import RegimeOutput
 from regime_engine.contracts.regimes import Regime
-from regime_engine.hysteresis.decision import HysteresisDecision, HysteresisTransition
+from regime_engine.hysteresis.state import SCHEMA_NAME as HYSTERESIS_SCHEMA
+from regime_engine.hysteresis.state import SCHEMA_VERSION as HYSTERESIS_SCHEMA_VERSION
+from regime_engine.hysteresis.state import HysteresisState
 
 
 def _regime_output(symbol: str, timestamp: int) -> RegimeOutput:
@@ -36,18 +38,19 @@ def _regime_output(symbol: str, timestamp: int) -> RegimeOutput:
     )
 
 
-def _hysteresis_decision(symbol: str, timestamp: int) -> HysteresisDecision:
-    return HysteresisDecision(
-        selected_output=_regime_output(symbol, timestamp),
-        effective_confidence=0.5,
-        transition=HysteresisTransition(
-            stable_regime=None,
-            candidate_regime=Regime.CHOP_BALANCED,
-            candidate_count=1,
-            transition_active=False,
-            flipped=False,
-            reset_due_to_gap=False,
-        ),
+def _hysteresis_state(symbol: str, timestamp: int) -> HysteresisState:
+    return HysteresisState(
+        schema=HYSTERESIS_SCHEMA,
+        schema_version=HYSTERESIS_SCHEMA_VERSION,
+        symbol=symbol,
+        engine_timestamp_ms=timestamp,
+        anchor_regime=Regime.CHOP_BALANCED,
+        candidate_regime=None,
+        progress_current=0,
+        progress_required=3,
+        last_commit_timestamp_ms=None,
+        reason_codes=(),
+        debug=None,
     )
 
 
@@ -136,7 +139,7 @@ class TestAnalysisEngineContracts(unittest.TestCase):
             gate_status="OPEN",
             gate_reasons=["ok"],
             regime_output=_regime_output("TEST", 123),
-            hysteresis_decision=None,
+            hysteresis_state=None,
         )
         with self.assertRaises(FrozenInstanceError):
             context.gate_status = "CLOSED"  # type: ignore[misc]

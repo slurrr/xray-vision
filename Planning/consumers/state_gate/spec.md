@@ -6,7 +6,7 @@
 
 Role in decision flow:
 
-- `orchestrator` publishes engine-run results (`RegimeOutput` and optionally `HysteresisDecision`) plus run metadata.
+- `orchestrator` publishes engine-run results (`RegimeOutput` and optionally `HysteresisState`) plus run metadata.
 - `state_gate` interprets those results into a minimal **state machine** and emits **gate open/closed** decisions with reasons.
 - Downstream consumers subscribe to `state_gate` outputs and must not act on engine outputs when the gate is closed.
 
@@ -29,7 +29,7 @@ Input event types relevant to `state_gate`:
 
 - `EngineRunCompleted` (contains `payload.regime_output`)
 - `EngineRunFailed`
-- `HysteresisDecisionPublished` (contains `payload.hysteresis_decision`) when orchestrator is configured for hysteresis mode
+- `HysteresisStatePublished` (contains `payload.hysteresis_state`) when orchestrator is configured for hysteresis mode
 
 Contract assumptions:
 
@@ -58,14 +58,14 @@ Contract assumptions:
 **Authoritative engine payload (optional by type)**
 
 - `payload.regime_output`: the `RegimeOutput` used for gating when available
-- `payload.hysteresis_decision`: the `HysteresisDecision` used for gating when available
+- `payload.hysteresis_state`: the `HysteresisState` used for gating when available
 - `payload.reset_reason`: string (for `StateReset`)
 - `payload.error_kind`: string (for `StateGateHalted`, non-sensitive, stable category)
 - `payload.error_detail`: string (for `StateGateHalted`, brief, non-sensitive)
 
 **Optional metadata (additive only)**
 
-- `input_event_type`: string (`EngineRunCompleted` | `EngineRunFailed` | `HysteresisDecisionPublished`)
+- `input_event_type`: string (`EngineRunCompleted` | `EngineRunFailed` | `HysteresisStatePublished`)
 - `engine_mode`: string (`truth` | `hysteresis`)
 
 **Event types**
@@ -145,7 +145,7 @@ Gating is a binary, explicit decision per run:
 
 For each `run_id`, `state_gate` must select the authoritative payload used for evaluation:
 
-- If a `HysteresisDecisionPublished` event exists for `run_id`, use `payload.hysteresis_decision` and treat `engine_mode == hysteresis`.
+- If a `HysteresisStatePublished` event exists for `run_id`, use `payload.hysteresis_state` and treat `engine_mode == hysteresis`.
 - Else if an `EngineRunCompleted` event exists for `run_id`, use `payload.regime_output` and treat `engine_mode == truth`.
 - Else if an `EngineRunFailed` event exists for `run_id`, evaluate as failure (no engine payload).
 
@@ -160,7 +160,7 @@ The v1 gate decision is determined by the following rules in order:
 2. **Configured denylist closes the gate**
    - If the selected `RegimeOutput.invalidations` contains any configured `denylisted_invalidations` entry (exact string match), gate is `CLOSED` and `state_status == HOLD`.
 3. **Configured transition hold (hysteresis mode only)**
-   - If in hysteresis mode and `hysteresis_decision.transition.transition_active == true` and config `block_during_transition == true`, gate is `CLOSED` and `state_status == HOLD`.
+   - If in hysteresis mode and `hysteresis_state.progress_current > 0` and config `block_during_transition == true`, gate is `CLOSED` and `state_status == HOLD`.
 4. **Otherwise open**
    - Gate is `OPEN` and `state_status == READY`.
 
@@ -172,7 +172,7 @@ Reason code vocabulary (v1):
 - `denylisted_invalidation:<invalidation_key>`
 - `transition_active` (hysteresis mode only)
 - `reset_timestamp_gap` (for `StateReset`)
-- `reset_engine_gap` (for hysteresis `reset_due_to_gap`, for `StateReset`)
+- `reset_engine_gap` (reserved; not emitted in v1)
 - `internal_failure` (for `StateGateHalted`)
 
 No other gating rules exist in v1.
@@ -194,7 +194,7 @@ No other gating rules exist in v1.
 
 - A configured engine timestamp gap is detected:
   - if `engine_timestamp_ms - last_engine_timestamp_ms > max_gap_ms` for that symbol, reset before evaluating the current run.
-- In hysteresis mode, if `hysteresis_decision.transition.reset_due_to_gap == true`, reset before evaluating the current run.
+No hysteresis-driven reset exists in v1.
 
 Reset is mechanical; it does not require interpreting market meaning.
 
@@ -202,7 +202,7 @@ Reset event requirements:
 
 - `StateReset.payload.reset_reason` must be:
   - `reset_timestamp_gap` for the configured timestamp gap condition
-  - `reset_engine_gap` for `reset_due_to_gap == true`
+  - `reset_engine_gap` reserved for future hysteresis-driven reset
 - After emitting `StateReset`, `state_gate` must continue processing the current run and emit `GateEvaluated` for the same `run_id`.
 
 ### Determinism requirements
@@ -219,7 +219,7 @@ Reset event requirements:
 - `orchestrator_event` v1 contract (input schema only).
 - Regime Engine output contracts as immutable payloads:
   - `RegimeOutput`
-  - `HysteresisDecision`
+  - `HysteresisState`
 - Local persistence primitives for the state transition log and snapshot cache.
 
 ### Forbidden coupling
