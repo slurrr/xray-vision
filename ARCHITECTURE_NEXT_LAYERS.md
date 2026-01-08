@@ -293,3 +293,124 @@ This document is intentionally limited to:
 - Long‑term safety
 
 Execution, trading, and strategy layers are **explicitly out of scope**.
+
+---
+
+## 9. Composer (Deterministic Input Assembly)
+
+### Purpose
+
+The Composer layer deterministically assembles **engine-ready inputs** from raw market events
+selected by the Orchestrator.
+
+It exists to make downstream inference possible **without violating the Regime Engine’s
+single-source-of-truth guarantees**.
+
+The Composer performs **no inference, no belief updates, and no hysteresis**.
+
+---
+
+### Responsibilities
+
+- Consume deterministic raw input cuts selected by the Orchestrator
+- Perform **pure, deterministic feature computation** (numeric descriptions only)
+- Construct **stateless evidence opinions** derived from features
+- Assemble immutable, replayable engine input snapshots
+- Guarantee replay equivalence from identical raw inputs
+
+---
+
+### Explicit Non-Responsibilities
+
+The Composer MUST NOT:
+
+- Maintain belief, regime state, or hysteresis
+- Authoritatively classify regimes
+- Apply validation, vetoes, or permissions
+- Gate downstream execution
+- Perform strategy, pattern detection, or analysis logic
+- Mutate or reinterpret raw payloads
+- Introduce feedback loops upstream
+
+---
+
+### Architectural Position
+
+  Market Data Adapters
+  ↓
+  Raw Event Bus
+  ↓
+  RawInputBuffer (conceptual dataflow stage)
+  ↓
+  Orchestrator (cut selection only)
+  ↓
+  Composer (feature + evidence assembly)
+  ↓
+  Regime Engine (belief + hysteresis)
+  ↓
+  Output Sinks / Consumers
+
+The Composer is the **only layer where numeric feature computation is permitted
+outside the Regime Engine**, and only in service of assembling inference inputs.
+
+---
+
+### Computation Classes
+
+The Composer explicitly separates two deterministic computation classes:
+
+#### Feature Computation
+
+- Numeric, descriptive calculations only
+  - indicators
+  - rolling statistics
+  - slopes, ratios, z-scores
+- Window-bounded state permitted
+- No interpretation or meaning
+- No regime logic
+
+Features describe *what was observed*, not *what it means*.
+
+#### Evidence Construction
+
+- Stateless observers that interpret features
+- Emit sparse, opinionated evidence
+  - direction
+  - strength
+  - confidence
+- Includes classical or heuristic regime observers
+- Evidence is advisory input to the Regime Engine, never truth
+
+---
+
+### Determinism & Replay Requirements
+
+- Identical raw inputs and cut boundaries MUST produce identical composed outputs
+- Feature computation MUST be pure and deterministic
+- Evidence construction MUST be stateless
+- Composer outputs MUST be replay-safe from raw logs alone
+
+---
+
+### Interface Contract
+
+The Composer emits immutable inputs suitable for Regime Engine invocation:
+
+- Feature snapshots (dense, numeric)
+- Evidence snapshots (sparse, opinionated)
+
+The Orchestrator remains responsible for invoking the Regime Engine using these
+composed inputs; the Composer never performs invocation itself.
+
+---
+
+### Mental Model
+
+- **Market Data**: collect receipts
+- **Orchestrator**: store receipts and choose *when* to evaluate
+- **Composer**: assemble *what* to evaluate
+- **Regime Engine**: decide *what it means*
+- **Consumers**: observe outcomes, never steer inference
+
+
+---

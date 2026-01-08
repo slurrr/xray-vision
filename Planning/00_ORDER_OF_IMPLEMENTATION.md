@@ -3,3 +3,4 @@
 3. consumers/state_gate
 4. consumers/analysis_engine
 5. consumers/dashboards
+6. composer

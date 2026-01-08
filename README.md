@@ -170,6 +170,227 @@ publisher.publish(
 )
 ```
 
+## Composer
+
+The Composer layer deterministically assembles engine-ready inputs from raw market data cuts.  
+It is the sole location where **feature computation** and **evidence construction** occur.
+
+The Composer does **not** perform inference, belief updates, hysteresis, or gating.
+
+What it does
+
+- Consumes deterministic cuts of `RawMarketEvent` selected by the orchestrator
+- Computes numeric, descriptive **features** (indicators, rolling statistics, structure measures)
+- Constructs **evidence opinions** by interpreting features (stateless observers)
+- Assembles immutable, replayable engine input snapshots
+- Emits composed inputs suitable for Regime Engine invocation
+
+What it does not do
+
+- Update or store belief state
+- Apply hysteresis or temporal inertia
+- Classify regimes authoritatively
+- Gate downstream execution
+- Perform strategy, analysis, or pattern recognition
+- Mutate or reinterpret raw payloads
+
+Non-goals
+
+- Inference or decision-making
+- Learning, optimization, or parameter adaptation
+- Consumer-specific logic
+- Downstream feedback or control signals
+
+Architectural role
+
+The Composer exists to make belief-driven inference possible without violating system discipline.
+
+Key principles:
+
+- **Belief is not in the data** — it must be constructed
+- **Features are numeric descriptions**, not meaning
+- **Evidence is opinionated but stateless**
+- **Inference lives downstream**
+
+The Composer provides the boundary between:
+
+- raw data ingestion (`market_data` / `orchestrator`)
+- belief inference (`regime_engine`)
+
+Computation classes
+
+The Composer explicitly separates two computation types:
+
+Feature computation
+
+- Deterministic numeric calculations (e.g. indicators, slopes, z-scores)
+- Window-bounded state only
+- No interpretation or meaning
+- Organized internally under a `features/` module
+
+Evidence construction
+
+- Stateless observers that interpret features
+- Emit sparse, opinionated evidence (direction, strength, confidence)
+- Includes classical or heuristic regime observers
+- Organized internally under an `evidence/` module
+
+Phase discipline
+
+- Follow `Planning/composer/tasks.md` strictly in order
+- Contracts are frozen before any feature or evidence logic is implemented
+- Feature math precedes evidence construction
+- No inference logic is permitted in this layer
+
+Determinism requirements
+
+- Identical raw inputs and cuts must produce identical composed outputs
+- Feature computation must be pure and deterministic
+- Evidence construction must be stateless
+- All outputs must be suitable for replay equivalence
+
+Public entrypoints
+
+- `composer.contracts.FeatureSnapshot`
+- `composer.contracts.EvidenceSnapshot`
+- `composer.composer.compose(...) -> (FeatureSnapshot, EvidenceSnapshot)`
+
+Minimal usage (conceptual)
+
+````python
+from composer.composer import compose
+
+feature_snapshot, evidence_snapshot = compose(
+    raw_events=cut_events,
+    symbol="TEST",
+    engine_timestamp_ms=180_000,
+)
+```
+The orchestrator is responsible for invoking the Regime Engine with composed inputs;
+the Composer does not perform invocation itself.
+
+
+## Regime Engine
+
+    > ⚠️ Architectural Clarification (Authoritative)
+    >
+    > The Regime Engine maintains a *single authoritative internal state* representing
+    > belief over regimes (RegimeState).
+    >
+    > “Regime” labels exposed in outputs are *derived projections* of that belief
+    > (e.g. dominant regime at the current timestep), not independently maintained truth.
+    >
+    > Any classical or heuristic regime classification logic is treated as *evidence*
+    > (observer opinions) feeding belief updates, not as a parallel source of authority.
+    >
+    > Hysteresis applies to belief evolution, not to regime labels directly.
+
+The Regime Engine is the truth layer of a crypto scanner. It classifies why price is
+moving, determines allowed behaviors, and exposes invalidations. All downstream
+layers depend on its outputs and may not recompute regime logic.
+
+What it does:
+
+- Deterministic regime classification from frozen inputs
+- Emits immutable `RegimeOutput` with drivers, invalidations, and permissions
+- Optional hysteresis wrapper for operational stability (separate from truth)
+
+What it does not do:
+
+- Generate trade signals
+- Scan patterns
+- Execute trades
+- Recompute regime logic downstream
+
+Non-goals:
+
+- Pattern detection
+- Trade signals
+- Execution logic
+- Strategy assumptions
+
+Phase discipline:
+
+- Follow `tasks.md` strictly in order.
+- Contracts come first. Do not implement features/scoring/veto/hysteresis logic
+  until Phase 0 contracts are complete and frozen.
+
+Determinism requirements:
+
+- Frozen dataclasses for snapshots and outputs
+- Explicit missing data representation (never silent)
+- Snapshot serialization suitable for replay
+
+Public entrypoints:
+
+- `regime_engine.engine.run(snapshot) -> RegimeOutput` (truth API)
+- `regime_engine.engine.run_with_hysteresis(snapshot, state, config) -> HysteresisDecision`
+
+Contracts are immutable. Changes require explicit versioning and downstream review.
+
+Minimal usage (truth API):
+
+```python
+from regime_engine.contracts.snapshots import (
+    ContextSnapshot,
+    DerivativesSnapshot,
+    FlowSnapshot,
+    MarketSnapshot,
+    RegimeInputSnapshot,
+)
+from regime_engine.engine import run
+
+snapshot = RegimeInputSnapshot(
+    symbol="TEST",
+    timestamp=180_000,
+    market=MarketSnapshot(
+        price=1.0,
+        vwap=1.0,
+        atr=1.0,
+        atr_z=0.0,
+        range_expansion=0.0,
+        structure_levels={},
+        acceptance_score=0.0,
+        sweep_score=0.0,
+    ),
+    derivatives=DerivativesSnapshot(
+        open_interest=1.0,
+        oi_slope_short=0.0,
+        oi_slope_med=0.0,
+        oi_accel=0.0,
+        funding_rate=0.0,
+        funding_slope=0.0,
+        funding_z=0.0,
+        liquidation_intensity=None,
+    ),
+    flow=FlowSnapshot(
+        cvd=0.0,
+        cvd_slope=0.0,
+        cvd_efficiency=0.0,
+        aggressive_volume_ratio=0.0,
+    ),
+    context=ContextSnapshot(
+        rs_vs_btc=0.0,
+        beta_to_btc=0.0,
+        alt_breadth=0.0,
+        btc_regime=None,
+        eth_regime=None,
+    ),
+)
+
+output = run(snapshot)
+````
+
+Minimal usage (hysteresis wrapper):
+
+```python
+from regime_engine.engine import run_with_hysteresis
+from regime_engine.hysteresis import HysteresisConfig, HysteresisStore
+
+store = HysteresisStore(states={})
+decision = run_with_hysteresis(snapshot, store, HysteresisConfig())
+```
+
 ## State Gate
 
 The state_gate layer materializes a deterministic per-symbol gate over orchestrator outputs and publishes explicit `state_gate_event` v1 decisions.
@@ -291,110 +512,54 @@ engine = AnalysisEngine(registry=registry, config=config)
 outputs = engine.consume(event)  # list of AnalysisEngineEvent (lifecycle, artifacts, failures)
 ```
 
-## Regime Engine
+## Dashboards
 
-The Regime Engine is the truth layer of a crypto scanner. It classifies why price is
-moving, determines allowed behaviors, and exposes invalidations. All downstream
-layers depend on its outputs and may not recompute regime logic.
+The dashboards layer renders a read-only view of system state using the Dashboard View Model (DVM) and a TUI renderer.
 
 What it does:
 
-- Deterministic regime classification from frozen inputs
-- Emits immutable `RegimeOutput` with drivers, invalidations, and permissions
-- Optional hysteresis wrapper for operational stability (separate from truth)
+- Consumes orchestrator, state_gate, and analysis_engine events to build full DVM snapshots
+- Renders immutable DVM snapshots via a TUI renderer
+- Surfaces ingest failures and staleness in system/telemetry sections
 
 What it does not do:
 
-- Generate trade signals
-- Scan patterns
-- Execute trades
-- Recompute regime logic downstream
+- Influence upstream behavior or emit control signals
+- Interpret regimes, apply scoring, or generate analysis logic
+- Depend on upstream schemas within the renderer (DVM only)
 
 Non-goals:
 
-- Pattern detection
-- Trade signals
-- Execution logic
-- Strategy assumptions
+- Alerting/notification systems
+- Bi-directional control or feedback
+- Partial/delta snapshot rendering (v1 produces full snapshots only)
 
 Phase discipline:
 
-- Follow `tasks.md` strictly in order.
-- Contracts come first. Do not implement features/scoring/veto/hysteresis logic
-  until Phase 0 contracts are complete and frozen.
+- Follow `Planning/consumers/dashboards/tasks.md` in order; DVM contract first, builder next, renderer after.
 
 Determinism requirements:
 
-- Frozen dataclasses for snapshots and outputs
-- Explicit missing data representation (never silent)
-- Snapshot serialization suitable for replay
+- DVM snapshots are immutable once produced
+- Arrays are deterministically ordered by contract rules
+- Missing optional sections never crash rendering
 
 Public entrypoints:
 
-- `regime_engine.engine.run(snapshot) -> RegimeOutput` (truth API)
-- `regime_engine.engine.run_with_hysteresis(snapshot, state, config) -> HysteresisDecision`
+- `consumers.dashboards.DashboardBuilder` (ingest events → DVM snapshots)
+- `consumers.dashboards.TuiRenderer` (render DVM snapshots)
+- Contracts in `consumers.dashboards.contracts` (`DashboardViewModel` and DVM sections)
 
-Contracts are immutable. Changes require explicit versioning and downstream review.
-
-Minimal usage (truth API):
-
-```python
-from regime_engine.contracts.snapshots import (
-    ContextSnapshot,
-    DerivativesSnapshot,
-    FlowSnapshot,
-    MarketSnapshot,
-    RegimeInputSnapshot,
-)
-from regime_engine.engine import run
-
-snapshot = RegimeInputSnapshot(
-    symbol="TEST",
-    timestamp=180_000,
-    market=MarketSnapshot(
-        price=1.0,
-        vwap=1.0,
-        atr=1.0,
-        atr_z=0.0,
-        range_expansion=0.0,
-        structure_levels={},
-        acceptance_score=0.0,
-        sweep_score=0.0,
-    ),
-    derivatives=DerivativesSnapshot(
-        open_interest=1.0,
-        oi_slope_short=0.0,
-        oi_slope_med=0.0,
-        oi_accel=0.0,
-        funding_rate=0.0,
-        funding_slope=0.0,
-        funding_z=0.0,
-        liquidation_intensity=None,
-    ),
-    flow=FlowSnapshot(
-        cvd=0.0,
-        cvd_slope=0.0,
-        cvd_efficiency=0.0,
-        aggressive_volume_ratio=0.0,
-    ),
-    context=ContextSnapshot(
-        rs_vs_btc=0.0,
-        beta_to_btc=0.0,
-        alt_breadth=0.0,
-        btc_regime=None,
-        eth_regime=None,
-    ),
-)
-
-output = run(snapshot)
-```
-
-Minimal usage (hysteresis wrapper):
+Minimal usage (builder + TUI):
 
 ```python
-from regime_engine.engine import run_with_hysteresis
-from regime_engine.hysteresis import HysteresisConfig, HysteresisStore
+from consumers.dashboards import DashboardBuilder, TuiRenderer
 
-store = HysteresisStore(states={})
-decision = run_with_hysteresis(snapshot, store, HysteresisConfig())
+builder = DashboardBuilder()
+renderer = TuiRenderer()
+renderer.start()
+
+# ingest upstream events into builder, then:
+snapshot = builder.build_snapshot()
+renderer.render(snapshot)
 ```

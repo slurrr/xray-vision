@@ -23,6 +23,16 @@ It does NOT:
 
 Downstream systems may **not** recompute regime logic.
 
+> Architectural Clarification (Authoritative)
+>
+> The Regime Engine’s single source of truth is **RegimeState** (belief).
+>
+> Regime labels emitted by the engine are **derived projections** of belief,
+> not independently authoritative truth.
+>
+> Any classical or heuristic regime classification logic is treated as
+> **evidence** that updates belief, not as a parallel source of authority.
+
 ---
 
 ## Source of Truth

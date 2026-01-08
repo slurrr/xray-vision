@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 
+from market_data.adapters.binance.adapter import BinanceTradeAdapter
+from market_data.adapters.binance.config import BinanceTradeAdapterConfig
+from market_data.config import BackpressureConfig
+from market_data.contracts import RawMarketEvent
+from market_data.observability import NullMetrics, Observability, StdlibLogger
+from market_data.pipeline import IngestionPipeline
+from market_data.sink import RawEventSink
 from runtime.bus import EventBus
-from runtime.stub_feed import StubMarketDataFeed
 from runtime.wiring import build_runtime, register_subscriptions
 
 LOG_DIR = "logs"
@@ -15,12 +22,23 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     handlers=[
         logging.FileHandler(os.path.join(LOG_DIR, "xray-vision.log")),
+        logging.StreamHandler(sys.stderr),
     ],
 )
+logging.getLogger("orchestrator").setLevel(logging.DEBUG)
+logging.getLogger("market_data").setLevel(logging.DEBUG)
+logging.getLogger("consumers").setLevel(logging.DEBUG)
+logging.getLogger("runtime").setLevel(logging.DEBUG)
 
-SOURCE_ID = "stub"
-SYMBOL = "BTC-USD"
-INTERVAL_MS = 1000
+
+class BusRawEventSink(RawEventSink):
+    def __init__(self, bus: EventBus) -> None:
+        self._bus = bus
+
+    def write(
+        self, event: RawMarketEvent, *, block: bool, timeout_ms: int | None
+    ) -> None:
+        self._bus.publish(event)
 
 
 def main() -> None:
@@ -28,15 +46,23 @@ def main() -> None:
     runtime = build_runtime(bus)
     register_subscriptions(bus, runtime)
     runtime.dashboards.start()
-    feed = StubMarketDataFeed(
-        bus=bus,
-        source_id=SOURCE_ID,
-        symbol=SYMBOL,
-        interval_ms=INTERVAL_MS,
+    pipeline = IngestionPipeline(
+        sink=BusRawEventSink(bus),
+        backpressure=BackpressureConfig(policy="fail", max_pending=10_000),
+        observability=Observability(
+            logger=StdlibLogger(logging.getLogger("market_data")),
+            metrics=NullMetrics(),
+        ),
     )
+    adapter = BinanceTradeAdapter(
+        config=BinanceTradeAdapterConfig.default(),
+        pipeline=pipeline,
+    )
+    adapter.start()
     try:
-        feed.run()
+        adapter.run()
     finally:
+        adapter.stop()
         runtime.dashboards.stop()
 
 
