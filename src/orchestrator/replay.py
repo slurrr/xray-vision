@@ -3,9 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
+from composer.engine_evidence.compute import compute_engine_evidence_snapshot
+from composer.features.compute import compute_feature_snapshot
+from composer.legacy_snapshot import build_legacy_snapshot
+from market_data.contracts import RawMarketEvent
 from orchestrator.buffer import RawInputBuffer
 from orchestrator.contracts import ENGINE_MODE_HYSTERESIS, EngineRunRecord, OrchestratorEvent
-from orchestrator.cuts import Cut
 from orchestrator.engine_runner import EngineRunResult
 from orchestrator.publisher import (
     build_engine_run_completed,
@@ -14,11 +17,11 @@ from orchestrator.publisher import (
     build_hysteresis_state_published,
 )
 from orchestrator.sequencing import SymbolSequencer
-from orchestrator.snapshots import build_snapshot, select_snapshot_event
 from regime_engine.contracts.outputs import RegimeOutput
+from regime_engine.contracts.snapshots import RegimeInputSnapshot
 from regime_engine.hysteresis.state import HysteresisState
 
-EngineCallable = Callable[[object], object]
+EngineCallable = Callable[[RegimeInputSnapshot], RegimeOutput | EngineRunResult]
 
 
 @dataclass
@@ -36,6 +39,13 @@ def replay_events(
     events: list[OrchestratorEvent] = []
 
     for record in run_records:
+        raw_events = _raw_events_for_cut(
+            buffer=buffer,
+            symbol=record.symbol,
+            start_seq=record.cut_start_ingest_seq,
+            end_seq=record.cut_end_ingest_seq,
+        )
+        counts_by_event_type = _counts_by_event_type(raw_events)
         start_event = build_engine_run_started(
             run_id=record.run_id,
             symbol=record.symbol,
@@ -60,20 +70,26 @@ def replay_events(
                 error_kind=record.error_kind or "engine_failure",
                 error_detail=record.error_detail or "engine failure",
                 attempt=record.attempts,
+                counts_by_event_type=counts_by_event_type,
             )
             _publish(sequencer, events, failure_event)
             continue
 
-        cut = Cut(
-            symbol=record.symbol,
-            cut_start_ingest_seq=record.cut_start_ingest_seq,
-            cut_end_ingest_seq=record.cut_end_ingest_seq,
-            cut_kind=record.cut_kind,
-        )
-        snapshot_event = select_snapshot_event(
-            buffer=buffer, cut=cut, engine_timestamp_ms=record.engine_timestamp_ms
-        )
-        if snapshot_event is None:
+        try:
+            feature_snapshot = compute_feature_snapshot(
+                raw_events,
+                symbol=record.symbol,
+                engine_timestamp_ms=record.engine_timestamp_ms,
+            )
+            evidence_snapshot = compute_engine_evidence_snapshot(feature_snapshot)
+            snapshot = build_legacy_snapshot(
+                raw_events,
+                symbol=record.symbol,
+                engine_timestamp_ms=record.engine_timestamp_ms,
+                feature_snapshot=feature_snapshot,
+                evidence_snapshot=evidence_snapshot,
+            )
+        except Exception as exc:
             failure_event = build_engine_run_failed(
                 run_id=record.run_id,
                 symbol=record.symbol,
@@ -82,18 +98,14 @@ def replay_events(
                 cut_end_ingest_seq=record.cut_end_ingest_seq,
                 cut_kind=record.cut_kind,
                 engine_mode=record.engine_mode,
-                error_kind="missing_snapshot_inputs",
-                error_detail="missing SnapshotInputs",
+                error_kind="snapshot_build_failure",
+                error_detail=str(exc),
                 attempt=record.attempts,
+                counts_by_event_type=counts_by_event_type,
             )
             _publish(sequencer, events, failure_event)
             continue
 
-        snapshot = build_snapshot(
-            symbol=record.symbol,
-            engine_timestamp_ms=record.engine_timestamp_ms,
-            snapshot_event=snapshot_event,
-        )
         output = engine_runner(snapshot)
         if record.engine_mode == ENGINE_MODE_HYSTERESIS:
             if not isinstance(output, EngineRunResult):
@@ -111,6 +123,7 @@ def replay_events(
                 cut_kind=record.cut_kind,
                 hysteresis_state=hysteresis_state,
                 attempt=record.attempts,
+                counts_by_event_type=counts_by_event_type,
             )
             _publish(sequencer, events, decision_event)
             completed_output = regime_output
@@ -132,6 +145,7 @@ def replay_events(
             engine_mode=record.engine_mode,
             regime_output=completed_output,
             attempt=record.attempts,
+            counts_by_event_type=counts_by_event_type,
         )
         _publish(sequencer, events, completed_event)
 
@@ -143,3 +157,21 @@ def _publish(
 ) -> None:
     sequencer.ensure_next(symbol=event.symbol, engine_timestamp_ms=event.engine_timestamp_ms)
     events.append(event)
+
+
+def _raw_events_for_cut(
+    *,
+    buffer: RawInputBuffer,
+    symbol: str,
+    start_seq: int,
+    end_seq: int,
+) -> tuple[RawMarketEvent, ...]:
+    records = buffer.range_by_symbol(symbol=symbol, start_seq=start_seq, end_seq=end_seq)
+    return tuple(record.event for record in records)
+
+
+def _counts_by_event_type(raw_events: tuple[RawMarketEvent, ...]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for event in raw_events:
+        counts[event.event_type] = counts.get(event.event_type, 0) + 1
+    return counts

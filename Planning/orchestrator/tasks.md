@@ -34,8 +34,8 @@ This task list is ordered and implementation-ready. Complete tasks strictly in o
 ## Phase 3 — Data-plane: Cut Selection + Engine Invocation
 
 14. Implement deterministic cut selection producing `(cut_start_ingest_seq, cut_end_ingest_seq, cut_kind)` per `(symbol, engine_timestamp_ms)`.
-15. Implement snapshot sourcing from `SnapshotInputs` events only (per `Planning/orchestrator/spec.md`), including the deterministic selection rule.
-16. Implement snapshot construction coordination using Regime Engine public APIs only (no derived feature computation in orchestrator).
+15. Implement snapshot assembly by delegating to `composer` using the deterministic raw cut slice (SnapshotInputs optional pass-through only; no derived feature computation in orchestrator).
+16. Implement snapshot construction coordination using Regime Engine public APIs only (composer returns a legacy `RegimeInputSnapshot` transport shell).
 17. Implement engine invocation for `truth` mode and (optionally) `hysteresis` mode, including persistence of hysteresis state transitions required for replay.
 
 ## Phase 4 — Data-plane: Output Publishing (Fan-out)

@@ -28,6 +28,7 @@ It exists to solve systemic problems that should not be handled by adapters or c
 - Append all observed raw events into an internal **RawInputBuffer** (append-only, replayable, no in-place mutation).
 - Maintain a deterministic **ingest sequence** (`ingest_seq`) for each buffered event.
 - Define deterministic **snapshot cuts** (input slices) for each engine invocation.
+- Delegate snapshot assembly to `composer` using the raw cut slice (no SnapshotInputs requirement).
 - Invoke the Regime Engine via public API only:
   - `regime_engine.engine.run(snapshot) -> RegimeOutput`
   - `regime_engine.engine.run_with_hysteresis(snapshot, state, config) -> HysteresisState`
@@ -154,6 +155,11 @@ The atomic execution unit is an **engine run** identified by:
 - **Timer-driven**: invoke runs every configured interval (`T`) using wall-clock time.
 - **Boundary-driven**: invoke runs on configured time boundaries (e.g., 3m close) with a fixed delay, without interpreting data completeness.
 
+In boundary-driven mode:
+
+- `engine_timestamp_ms` is the boundary timestamp (aligned).
+- `planned_ts_ms` is the wall-clock trigger time and equals `engine_timestamp_ms + boundary_delay_ms`.
+
 In both modes:
 
 - `orchestrator` is responsible for choosing invocation timestamps and cuts deterministically.
@@ -170,21 +176,19 @@ The mapping from scheduler tick/boundary → `cut_end_ingest_seq` must be determ
 
 ### Snapshot sourcing (no derived computation)
 
-For v1, `orchestrator` sources engine snapshot inputs only from upstream `RawMarketEvent` items with:
+For v1, `orchestrator` delegates snapshot assembly to `composer` (migration-only snapshot builder).
 
-- `event_type == SnapshotInputs`
-- `normalized.timestamp_ms == engine_timestamp_ms`
+Inputs to composer snapshot assembly are exactly:
 
-Selection rule:
+- the deterministic raw cut slice (`RawMarketEvent` sequence for the run’s symbol)
+- `symbol`
+- `engine_timestamp_ms`
 
-- For a given run cut, select the **single** `SnapshotInputs` event with the highest `ingest_seq` within `[cut_start_ingest_seq, cut_end_ingest_seq]`.
+Composer is responsible for producing a legacy `RegimeInputSnapshot` transport shell suitable for `regime_engine.engine.run(snapshot)` and (when available) embedding canonical engine evidence under:
 
-If no such `SnapshotInputs` event exists within the cut, `orchestrator` must:
+- `snapshot.market.structure_levels["composer_evidence_snapshot_v1"]`
 
-- emit `EngineRunFailed` with `error_kind == missing_snapshot_inputs`, and
-- not invoke the Regime Engine for that run.
-
-If the selected `SnapshotInputs` event omits any sub-object or field, `orchestrator` must pass the omission through as an explicit missing value per the frozen Regime Engine input contract; it must not fabricate or compute replacements.
+`SnapshotInputs` events, when present in the raw cut, are **optional pass-through** inputs to composer’s snapshot builder; they are not required for a run to proceed. Orchestrator must not fail a run solely due to absence of `SnapshotInputs`.
 
 ### Concurrency
 
@@ -210,6 +214,7 @@ then a replay must reproduce the same sequence of `OrchestratorEvent` v1 outputs
 ### Allowed dependencies
 
 - `market_data` contract types (input schema only).
+- `composer` snapshot assembly (migration-only; transport only).
 - Regime Engine public API (`regime_engine.engine.*`) and its frozen contract payloads (`RegimeOutput`, `HysteresisState`).
 - Storage primitives for append-only logs (file, local DB, or equivalent) as an implementation detail.
 - Messaging primitives for input subscription and output publish (broker choice is an implementation detail).

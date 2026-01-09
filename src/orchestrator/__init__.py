@@ -56,7 +56,6 @@ from orchestrator.run_id import RUN_ID_FIELDS, derive_run_id
 from orchestrator.run_records import EngineRunLog
 from orchestrator.scheduler import Scheduler
 from orchestrator.sequencing import SymbolSequencer
-from orchestrator.snapshots import build_snapshot, select_snapshot_event
 from orchestrator.subscription import BufferingSubscriber, InputSubscriber
 
 __all__ = [
@@ -99,8 +98,6 @@ __all__ = [
     "RetrySchedule",
     "Scheduler",
     "SymbolSequencer",
-    "build_snapshot",
-    "select_snapshot_event",
     "EventSink",
     "OrchestratorEventPublisher",
     "build_engine_run_completed",

@@ -98,7 +98,7 @@ Scheduling decides *when to run*, never *what it means*.
 
 * Ingestion errors → logged + retried per config (bounded, deterministic)
 * Buffer append failure → fail-fast to not-ready/degraded (never silent drop)
-* Missing `SnapshotInputs` in cut → emit `EngineRunFailed` (`missing_snapshot_inputs`) and do not invoke engine
+* If `SnapshotInputs` are missing, orchestrator may proceed using composer-assembled snapshot per spec. Emit `EngineRunFailed` only if neither `SnapshotInputs` nor composer fallback snapshot is available.
 * Engine failures → bounded retries, then `EngineRunFailed`, then continue
 * Publish failures → bounded retries, then halt/pause scheduling (no silent drop)
 

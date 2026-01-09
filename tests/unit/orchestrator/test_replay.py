@@ -2,43 +2,46 @@ import unittest
 
 from market_data.contracts import RawMarketEvent
 from orchestrator.buffer import RawInputBuffer
-from orchestrator.contracts import EngineRunRecord
+from orchestrator.contracts import EngineRunCompletedPayload, EngineRunRecord
 from orchestrator.replay import replay_events
-from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.contracts.regimes import Regime
+from regime_engine.engine import run
 
 
-def _snapshot_event(symbol: str, timestamp_ms: int) -> RawMarketEvent:
+def _trade_event(symbol: str, seq: int) -> RawMarketEvent:
     return RawMarketEvent(
         schema="raw_market_event",
         schema_version="1",
-        event_type="SnapshotInputs",
+        event_type="TradeTick",
         source_id="source",
         symbol=symbol,
-        exchange_ts_ms=None,
-        recv_ts_ms=1,
+        exchange_ts_ms=1,
+        recv_ts_ms=seq,
         raw_payload=b"{}",
-        normalized={"timestamp_ms": timestamp_ms, "market": {"price": 1.0}},
+        normalized={"price": 100.0, "quantity": 1.0, "side": "buy"},
+        channel="trades",
     )
 
 
-def _engine_runner(snapshot) -> RegimeOutput:
-    return RegimeOutput(
-        symbol=snapshot.symbol,
-        timestamp=snapshot.timestamp,
-        regime=Regime.CHOP_BALANCED,
-        confidence=0.0,
-        drivers=[],
-        invalidations=[],
-        permissions=[],
+def _open_interest_event(symbol: str, seq: int) -> RawMarketEvent:
+    return RawMarketEvent(
+        schema="raw_market_event",
+        schema_version="1",
+        event_type="OpenInterest",
+        source_id="source",
+        symbol=symbol,
+        exchange_ts_ms=2,
+        recv_ts_ms=seq,
+        raw_payload=b"{}",
+        normalized={"open_interest": 1000.0},
+        channel="open_interest",
     )
 
 
 class TestReplay(unittest.TestCase):
     def test_replay_is_deterministic(self) -> None:
         buffer = RawInputBuffer(max_records=10)
-        buffer.append(_snapshot_event("AAA", 100), ingest_ts_ms=1)
-        buffer.append(_snapshot_event("AAA", 200), ingest_ts_ms=2)
+        buffer.append(_trade_event("AAA", 1), ingest_ts_ms=1)
+        buffer.append(_open_interest_event("AAA", 2), ingest_ts_ms=2)
 
         run_records = [
             EngineRunRecord(
@@ -71,8 +74,8 @@ class TestReplay(unittest.TestCase):
             ),
         ]
 
-        first = replay_events(buffer=buffer, run_records=run_records, engine_runner=_engine_runner)
-        second = replay_events(buffer=buffer, run_records=run_records, engine_runner=_engine_runner)
+        first = replay_events(buffer=buffer, run_records=run_records, engine_runner=run)
+        second = replay_events(buffer=buffer, run_records=run_records, engine_runner=run)
 
         self.assertEqual(
             [event.event_type for event in first.events],
@@ -83,17 +86,19 @@ class TestReplay(unittest.TestCase):
             [event.run_id for event in second.events],
         )
 
-    def test_replay_emits_failure_on_missing_snapshot(self) -> None:
+    def test_replay_embeds_evidence_without_snapshotinputs(self) -> None:
         buffer = RawInputBuffer(max_records=10)
+        buffer.append(_trade_event("AAA", 1), ingest_ts_ms=1)
+        buffer.append(_open_interest_event("AAA", 2), ingest_ts_ms=2)
         run_records = [
             EngineRunRecord(
                 run_id="run-1",
                 symbol="AAA",
-                engine_timestamp_ms=100,
+                engine_timestamp_ms=180_000,
                 engine_mode="truth",
                 cut_kind="timer",
                 cut_start_ingest_seq=1,
-                cut_end_ingest_seq=1,
+                cut_end_ingest_seq=2,
                 planned_ts_ms=90,
                 started_ts_ms=91,
                 completed_ts_ms=92,
@@ -102,8 +107,19 @@ class TestReplay(unittest.TestCase):
             )
         ]
 
-        result = replay_events(buffer=buffer, run_records=run_records, engine_runner=_engine_runner)
-        self.assertEqual(result.events[-1].event_type, "EngineRunFailed")
+        result = replay_events(buffer=buffer, run_records=run_records, engine_runner=run)
+        completed = result.events[-1]
+        self.assertEqual(completed.event_type, "EngineRunCompleted")
+        self.assertIsNotNone(completed.payload)
+        payload = completed.payload
+        self.assertIsInstance(payload, EngineRunCompletedPayload)
+        assert isinstance(payload, EngineRunCompletedPayload)
+        drivers = payload.regime_output.drivers
+        self.assertTrue(any(driver.startswith("composer:") for driver in drivers))
+        self.assertEqual(
+            completed.counts_by_event_type,
+            {"TradeTick": 1, "OpenInterest": 1},
+        )
 
 
 if __name__ == "__main__":
