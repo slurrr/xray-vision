@@ -65,6 +65,7 @@ def _hysteresis_state(
     progress_current: int,
     progress_required: int,
     reason_codes: tuple[str, ...],
+    debug: dict[str, object] | None = None,
 ) -> HysteresisState:
     return HysteresisState(
         schema=SCHEMA_NAME,
@@ -77,7 +78,7 @@ def _hysteresis_state(
         progress_required=progress_required,
         last_commit_timestamp_ms=None,
         reason_codes=reason_codes,
-        debug=None,
+        debug=debug,
     )
 
 
@@ -378,6 +379,101 @@ class TestDashboardBuilder(unittest.TestCase):
         self.assertEqual(summary.progress.required, 3)
         self.assertEqual(summary.progress.current, 0)
         self.assertEqual(summary.confidence_trend, "FLAT")
+
+    def test_belief_section_is_populated(self) -> None:
+        builder = DashboardBuilder(time_fn=lambda: 250)
+        symbol = "BELIEF"
+        hysteresis_state = _hysteresis_state(
+            symbol=symbol,
+            engine_timestamp_ms=180_000,
+            anchor_regime=Regime.CHOP_BALANCED,
+            candidate_regime=None,
+            progress_current=0,
+            progress_required=3,
+            reason_codes=(),
+            debug={
+                "belief_by_regime": {
+                    Regime.CHOP_BALANCED.value: 0.6,
+                    Regime.SQUEEZE_UP.value: 0.4,
+                }
+            },
+        )
+        builder.ingest_orchestrator_event(
+            _orchestrator_event(
+                event_type="HysteresisStatePublished",
+                run_id="run-1",
+                symbol=symbol,
+                engine_timestamp_ms=180_000,
+                payload=HysteresisStatePayload(hysteresis_state=hysteresis_state),
+                engine_mode="hysteresis",
+            )
+        )
+        snapshot = builder.build_snapshot(as_of_ts_ms=181_000)
+        belief = snapshot.symbols[0].belief
+        self.assertIsNotNone(belief)
+        assert belief is not None
+        self.assertEqual(belief.anchor_regime, Regime.CHOP_BALANCED.value)
+        self.assertEqual(belief.distribution[0].regime_name, Regime.CHOP_BALANCED.value)
+
+    def test_belief_trend_is_deterministic(self) -> None:
+        builder = DashboardBuilder(time_fn=lambda: 260)
+        symbol = "TREND"
+        first_state = _hysteresis_state(
+            symbol=symbol,
+            engine_timestamp_ms=180_000,
+            anchor_regime=Regime.CHOP_BALANCED,
+            candidate_regime=None,
+            progress_current=0,
+            progress_required=3,
+            reason_codes=(),
+            debug={
+                "belief_by_regime": {
+                    Regime.CHOP_BALANCED.value: 0.4,
+                    Regime.SQUEEZE_UP.value: 0.6,
+                }
+            },
+        )
+        second_state = _hysteresis_state(
+            symbol=symbol,
+            engine_timestamp_ms=180_000,
+            anchor_regime=Regime.CHOP_BALANCED,
+            candidate_regime=None,
+            progress_current=0,
+            progress_required=3,
+            reason_codes=(),
+            debug={
+                "belief_by_regime": {
+                    Regime.CHOP_BALANCED.value: 0.7,
+                    Regime.SQUEEZE_UP.value: 0.3,
+                }
+            },
+        )
+        builder.ingest_orchestrator_event(
+            _orchestrator_event(
+                event_type="HysteresisStatePublished",
+                run_id="run-1",
+                symbol=symbol,
+                engine_timestamp_ms=180_000,
+                payload=HysteresisStatePayload(hysteresis_state=first_state),
+                engine_mode="hysteresis",
+            )
+        )
+        builder.build_snapshot(as_of_ts_ms=181_000)
+        builder.ingest_orchestrator_event(
+            _orchestrator_event(
+                event_type="HysteresisStatePublished",
+                run_id="run-2",
+                symbol=symbol,
+                engine_timestamp_ms=180_000,
+                payload=HysteresisStatePayload(hysteresis_state=second_state),
+                engine_mode="hysteresis",
+            )
+        )
+        snapshot = builder.build_snapshot(as_of_ts_ms=182_000)
+        belief = snapshot.symbols[0].belief
+        self.assertIsNotNone(belief)
+        assert belief is not None
+        self.assertEqual(belief.trend.status, "RISING")
 
     def test_staleness_signals_missing_inputs(self) -> None:
         builder = DashboardBuilder(time_fn=lambda: 333)

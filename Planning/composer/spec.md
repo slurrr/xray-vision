@@ -5,10 +5,12 @@
 This subsystem exists to support a system-wide architectural shift:
 
 FROM:
+
 - Regime classified as truth
 - Belief implemented as a hysteresis wrapper around regime output
 
 TO:
+
 - Regime represented as belief (RegimeState)
 - Hysteresis as inertia on belief mass
 - Regime labels exposed only as projections of belief

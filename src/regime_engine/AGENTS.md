@@ -33,6 +33,9 @@ Downstream systems may **not** recompute regime logic.
 > Any classical or heuristic regime classification logic is treated as
 > **evidence** that updates belief, not as a parallel source of authority.
 
+EvidenceSnapshot is the sole ingress for upstream signals, including Composer.
+All opinions are treated uniformly as belief evidence.
+
 Hysteresis is defined exclusively over belief (RegimeState) and produces
 HysteresisState as the sole authoritative output; legacy decision-based
 hysteresis is deprecated.

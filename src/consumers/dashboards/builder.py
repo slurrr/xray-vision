@@ -44,6 +44,10 @@ from regime_engine.contracts.regimes import Regime
 from regime_engine.hysteresis.state import HysteresisState
 
 from .contracts import (
+    BELIEF_TREND_FALLING,
+    BELIEF_TREND_FLAT,
+    BELIEF_TREND_RISING,
+    BELIEF_TREND_UNKNOWN,
     CONFIDENCE_TREND_FALLING,
     CONFIDENCE_TREND_FLAT,
     CONFIDENCE_TREND_RISING,
@@ -55,6 +59,10 @@ from .contracts import (
     PHASE_TRANSITIONING,
     AnalysisArtifactSummary,
     AnalysisSection,
+    BeliefDistributionEntry,
+    BeliefSnapshot,
+    BeliefTrend,
+    BeliefTrendStatus,
     ComponentStatus,
     ConfidenceTrend,
     DashboardViewModel,
@@ -124,6 +132,8 @@ class _SymbolState:
     regime_truth_ts: int | None = None
     hysteresis: HysteresisSnapshot | None = None
     hysteresis_ts: int | None = None
+    belief: BeliefSnapshot | None = None
+    belief_ts: int | None = None
     regime_effective: RegimeEffectiveSnapshot | None = None
     regime_effective_ts: int | None = None
     analysis: _AnalysisState = field(default_factory=_AnalysisState)
@@ -133,6 +143,7 @@ class _SymbolState:
     hysteresis_progress_required: int | None = None
     previous_progress_required: int | None = None
     previous_effective_confidence: float | None = None
+    previous_belief_by_regime: dict[str, float] | None = None
 
     def track_run(self, run_id: str, engine_timestamp_ms: int) -> None:
         if (
@@ -199,6 +210,16 @@ class DashboardBuilder:
                     symbol_state.hysteresis_progress_required = (
                         event.payload.hysteresis_state.progress_required
                     )
+                belief_snapshot = _belief_snapshot_from_state(
+                    event.payload.hysteresis_state,
+                    previous_belief=symbol_state.previous_belief_by_regime,
+                )
+                if belief_snapshot is not None and (
+                    symbol_state.belief_ts is None
+                    or event.engine_timestamp_ms >= symbol_state.belief_ts
+                ):
+                    symbol_state.belief = belief_snapshot
+                    symbol_state.belief_ts = event.engine_timestamp_ms
         except Exception as exc:  # pragma: no cover - defensive guard
             self._record_ingest_failure(
                 input_schema=event.schema,
@@ -261,6 +282,16 @@ class DashboardBuilder:
                         symbol_state.hysteresis_progress_required = (
                             event.payload.hysteresis_state.progress_required
                         )
+                    belief_snapshot = _belief_snapshot_from_state(
+                        event.payload.hysteresis_state,
+                        previous_belief=symbol_state.previous_belief_by_regime,
+                    )
+                    if belief_snapshot is not None and (
+                        symbol_state.belief_ts is None
+                        or event.engine_timestamp_ms >= symbol_state.belief_ts
+                    ):
+                        symbol_state.belief = belief_snapshot
+                        symbol_state.belief_ts = event.engine_timestamp_ms
         except Exception as exc:  # pragma: no cover - defensive guard
             self._record_ingest_failure(
                 input_schema=event.schema,
@@ -412,9 +443,11 @@ class DashboardBuilder:
             regime_effective=symbol_state.regime_effective,
             analysis=analysis_section,
             metrics=symbol_state.metrics,
+            belief=symbol_state.belief,
         )
 
         self._update_previous_hysteresis_state(symbol_state, hysteresis_snapshot)
+        self._update_previous_belief_state(symbol_state, symbol_state.belief)
         return snapshot
 
     def _build_hysteresis_summary(self, symbol_state: _SymbolState) -> HysteresisSummary | None:
@@ -456,6 +489,19 @@ class DashboardBuilder:
         if current < previous:
             return CONFIDENCE_TREND_FALLING
         return CONFIDENCE_TREND_FLAT
+
+    def _update_previous_belief_state(
+        self,
+        symbol_state: _SymbolState,
+        belief_snapshot: BeliefSnapshot | None,
+    ) -> None:
+        if belief_snapshot is None:
+            symbol_state.previous_belief_by_regime = None
+            return
+        symbol_state.previous_belief_by_regime = {
+            entry.regime_name: entry.mass
+            for entry in belief_snapshot.distribution
+        }
 
     def _build_analysis_section(self, analysis_state: _AnalysisState) -> AnalysisSection | None:
         if not analysis_state.highlights and not analysis_state.artifacts:
@@ -684,6 +730,82 @@ def _hysteresis_snapshot_from_state(
             reset_due_to_gap=False,
         ),
     )
+
+
+def _belief_snapshot_from_state(
+    state: HysteresisState,
+    *,
+    previous_belief: dict[str, float] | None,
+) -> BeliefSnapshot | None:
+    debug = state.debug
+    if debug is None or not isinstance(debug, dict):
+        return None
+    belief_payload = debug.get("belief_by_regime")
+    if not isinstance(belief_payload, dict):
+        return None
+
+    distribution: list[BeliefDistributionEntry] = []
+    for regime in Regime:
+        value = belief_payload.get(regime.value)
+        if isinstance(value, (int, float)):
+            distribution.append(
+                BeliefDistributionEntry(regime_name=regime.value, mass=float(value))
+            )
+    if not distribution:
+        return None
+
+    anchor_regime = _anchor_from_distribution(distribution)
+    trend = _belief_trend(
+        anchor_regime=anchor_regime,
+        distribution=distribution,
+        previous_belief=previous_belief,
+    )
+    return BeliefSnapshot(
+        anchor_regime=anchor_regime,
+        distribution=tuple(distribution),
+        trend=trend,
+    )
+
+
+def _anchor_from_distribution(distribution: Sequence[BeliefDistributionEntry]) -> str:
+    masses = {entry.regime_name: entry.mass for entry in distribution}
+    best_regime = Regime.CHOP_BALANCED.value
+    best_mass = float("-inf")
+    for regime in Regime:
+        mass = masses.get(regime.value)
+        if mass is None:
+            continue
+        if mass > best_mass:
+            best_regime = regime.value
+            best_mass = mass
+    return best_regime
+
+
+def _belief_trend(
+    *,
+    anchor_regime: str,
+    distribution: Sequence[BeliefDistributionEntry],
+    previous_belief: dict[str, float] | None,
+) -> BeliefTrend:
+    current_mass = next(
+        (entry.mass for entry in distribution if entry.regime_name == anchor_regime),
+        None,
+    )
+    if current_mass is None or previous_belief is None:
+        return BeliefTrend(status=BELIEF_TREND_UNKNOWN, anchor_mass_delta=None)
+    prior_mass = previous_belief.get(anchor_regime)
+    if prior_mass is None:
+        return BeliefTrend(status=BELIEF_TREND_UNKNOWN, anchor_mass_delta=None)
+
+    delta = current_mass - prior_mass
+    status: BeliefTrendStatus
+    if delta > 0:
+        status = BELIEF_TREND_RISING
+    elif delta < 0:
+        status = BELIEF_TREND_FALLING
+    else:
+        status = BELIEF_TREND_FLAT
+    return BeliefTrend(status=status, anchor_mass_delta=delta)
 
 
 def _regime_value(regime: Regime | None) -> str | None:

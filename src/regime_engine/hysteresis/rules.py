@@ -158,6 +158,13 @@ def advance_hysteresis(
     if progress > progress_required:
         progress = progress_required
 
+    belief_debug = {
+        "belief_by_regime": {
+            regime.value: value
+            for regime, value in regime_state.belief_by_regime.items()
+        }
+    }
+
     return HysteresisState(
         schema=SCHEMA_NAME,
         schema_version=SCHEMA_VERSION,
@@ -169,5 +176,5 @@ def advance_hysteresis(
         progress_required=progress_required,
         last_commit_timestamp_ms=last_commit,
         reason_codes=tuple(reasons),
-        debug=None,
+        debug=belief_debug,
     )

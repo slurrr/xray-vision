@@ -15,11 +15,17 @@ from regime_engine.hysteresis import (
     HysteresisStore,
     process_state,
 )
+from regime_engine.observability import get_observability
 from regime_engine.pipeline import run_pipeline, run_pipeline_with_state
 
 
 def run(snapshot: RegimeInputSnapshot) -> RegimeOutput:
-    return run_pipeline(snapshot)
+    get_observability().log_engine_entry(
+        symbol=snapshot.symbol,
+        engine_timestamp_ms=snapshot.timestamp,
+    )
+    output = run_pipeline(snapshot)
+    return output
 
 
 def run_with_hysteresis(
@@ -28,4 +34,5 @@ def run_with_hysteresis(
     config: HysteresisConfig | None = None,
 ) -> HysteresisState:
     _output, regime_state = run_pipeline_with_state(snapshot)
-    return process_state(regime_state, store=state, config=config)
+    hysteresis_state = process_state(regime_state, store=state, config=config)
+    return hysteresis_state

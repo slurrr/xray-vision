@@ -6,10 +6,13 @@ snapshot → score → veto → resolve → confidence → explain
 from __future__ import annotations
 
 from regime_engine.confidence import synthesize_confidence
+from regime_engine.confidence.types import ConfidenceResult
 from regime_engine.contracts.outputs import RegimeOutput
-from regime_engine.contracts.regimes import RegimeScore
+from regime_engine.contracts.regimes import Regime, RegimeScore
 from regime_engine.contracts.snapshots import RegimeInputSnapshot
 from regime_engine.explainability import build_regime_output
+from regime_engine.explainability.permissions import permissions_for_regime
+from regime_engine.explainability.validate import validate_explainability
 from regime_engine.resolution import resolve_regime
 from regime_engine.resolution.types import ResolutionResult
 from regime_engine.scoring import score_all
@@ -18,6 +21,10 @@ from regime_engine.state import (
     initialize_state,
     project_regime,
     update_belief,
+)
+from regime_engine.state.embedded_evidence import (
+    EmbeddedEvidenceResult,
+    extract_embedded_evidence,
 )
 from regime_engine.state.state import RegimeState
 
@@ -70,12 +77,16 @@ def run_pipeline_with_state(
         agreement_transform=_agreement_transform,
         veto_penalty_transform=_veto_penalty_transform,
     )
-    evidence = build_classical_evidence(
-        resolution,
-        confidence,
-        symbol=snapshot.symbol,
-        engine_timestamp_ms=snapshot.timestamp,
-    )
+    embedded = extract_embedded_evidence(snapshot)
+    if embedded is None:
+        evidence = build_classical_evidence(
+            resolution,
+            confidence,
+            symbol=snapshot.symbol,
+            engine_timestamp_ms=snapshot.timestamp,
+        )
+    else:
+        evidence = embedded.evidence
     prior_state = initialize_state(
         symbol=snapshot.symbol,
         engine_timestamp_ms=snapshot.timestamp,
@@ -89,15 +100,52 @@ def run_pipeline_with_state(
             contributors=resolution.winner.contributors,
         )
     projected_resolution = _apply_projection_to_resolution(resolution, projected)
-    output = build_regime_output(
-        snapshot.symbol,
-        snapshot.timestamp,
-        projected_resolution,
-        confidence,
-    )
+    if embedded is None:
+        output = build_regime_output(
+            snapshot.symbol,
+            snapshot.timestamp,
+            projected_resolution,
+            confidence,
+        )
+    else:
+        output = _build_evidence_output(
+            snapshot=snapshot,
+            confidence=confidence,
+            embedded=embedded,
+            projected_regime=project_regime(updated_state),
+        )
     return output, updated_state
 
 
 def run_pipeline(snapshot: RegimeInputSnapshot) -> RegimeOutput:
     output, _state = run_pipeline_with_state(snapshot)
     return output
+
+
+def _build_evidence_output(
+    *,
+    snapshot: RegimeInputSnapshot,
+    confidence: ConfidenceResult,
+    embedded: EmbeddedEvidenceResult,
+    projected_regime: Regime,
+) -> RegimeOutput:
+    drivers = embedded.drivers
+    invalidations = embedded.invalidations
+    permissions = permissions_for_regime(projected_regime)
+    projected_score = RegimeScore(
+        regime=projected_regime,
+        score=0.0,
+        contributors=[],
+    )
+    validate_explainability(projected_score, drivers, invalidations, permissions)
+
+    confidence_value = confidence.confidence if confidence.confidence is not None else 0.0
+    return RegimeOutput(
+        symbol=snapshot.symbol,
+        timestamp=snapshot.timestamp,
+        regime=projected_regime,
+        confidence=confidence_value,
+        drivers=drivers,
+        invalidations=invalidations,
+        permissions=permissions,
+    )

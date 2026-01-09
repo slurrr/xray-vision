@@ -4,6 +4,7 @@ from collections.abc import Iterable, Mapping
 from types import MappingProxyType
 
 from regime_engine.contracts.regimes import Regime
+from regime_engine.observability import get_observability
 from regime_engine.state.evidence import EvidenceOpinion, EvidenceSnapshot
 from regime_engine.state.invariants import assert_belief_invariants
 from regime_engine.state.state import SCHEMA_NAME, SCHEMA_VERSION, RegimeState
@@ -62,6 +63,13 @@ def update_belief(state: RegimeState, evidence: EvidenceSnapshot) -> RegimeState
             anchor_regime=state.anchor_regime,
         )
         assert_belief_invariants(updated)
+        get_observability().log_belief_aggregation(
+            symbol=state.symbol,
+            engine_timestamp_ms=evidence.engine_timestamp_ms,
+            anchor_regime=state.anchor_regime,
+            selected_regime=None,
+            belief_by_regime=state.belief_by_regime,
+        )
         return updated
 
     beliefs = {regime: 1.0 if regime == selected.regime else 0.0 for regime in _REGIME_ORDER}
@@ -74,6 +82,13 @@ def update_belief(state: RegimeState, evidence: EvidenceSnapshot) -> RegimeState
         anchor_regime=selected.regime,
     )
     assert_belief_invariants(updated)
+    get_observability().log_belief_aggregation(
+        symbol=state.symbol,
+        engine_timestamp_ms=evidence.engine_timestamp_ms,
+        anchor_regime=updated.anchor_regime,
+        selected_regime=selected.regime,
+        belief_by_regime=updated.belief_by_regime,
+    )
     return updated
 
 

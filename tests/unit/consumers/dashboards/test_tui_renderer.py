@@ -59,7 +59,12 @@ def _hysteresis_state(symbol: str, timestamp: int) -> HysteresisState:
         progress_required=2,
         last_commit_timestamp_ms=None,
         reason_codes=("COMMIT_SWITCH:CHOP_BALANCED->SQUEEZE_UP",),
-        debug=None,
+        debug={
+            "belief_by_regime": {
+                Regime.CHOP_BALANCED.value: 0.7,
+                Regime.SQUEEZE_UP.value: 0.3,
+            }
+        },
     )
 
 
@@ -232,6 +237,8 @@ class TestTuiRenderer(unittest.TestCase):
         self.assertIn("regime_effective", output)
         self.assertIn("regime_truth", output)
         self.assertIn("hysteresis_confidence", output)
+        self.assertIn("belief_anchor", output)
+        self.assertIn("belief_distribution", output)
         self.assertIn("analysis_status=PRESENT", output)
         self.assertIn("artifact=m1:a1", output)
 

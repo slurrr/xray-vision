@@ -22,6 +22,12 @@ CONFIDENCE_TREND_FALLING = "FALLING"
 CONFIDENCE_TREND_FLAT = "FLAT"
 ConfidenceTrend = Literal["RISING", "FALLING", "FLAT"]
 
+BELIEF_TREND_RISING = "RISING"
+BELIEF_TREND_FALLING = "FALLING"
+BELIEF_TREND_FLAT = "FLAT"
+BELIEF_TREND_UNKNOWN = "UNKNOWN"
+BeliefTrendStatus = Literal["RISING", "FALLING", "FLAT", "UNKNOWN"]
+
 PHASE_STABLE = "STABLE"
 PHASE_TRANSITIONING = "TRANSITIONING"
 PHASE_FLIPPED = "FLIPPED"
@@ -177,6 +183,34 @@ class MetricsSnapshot:
 
 
 @dataclass(frozen=True)
+class BeliefDistributionEntry:
+    regime_name: str
+    mass: float
+
+
+@dataclass(frozen=True)
+class BeliefTrend:
+    status: BeliefTrendStatus
+    anchor_mass_delta: float | None
+
+
+@dataclass(frozen=True)
+class BeliefSnapshot:
+    anchor_regime: str
+    distribution: Sequence[BeliefDistributionEntry]
+    trend: BeliefTrend
+
+    def __post_init__(self) -> None:
+        ordered_distribution = tuple(
+            sorted(
+                self.distribution,
+                key=lambda entry: (-entry.mass, entry.regime_name),
+            )
+        )
+        object.__setattr__(self, "distribution", ordered_distribution)
+
+
+@dataclass(frozen=True)
 class SymbolSnapshot:
     symbol: str
     last_run_id: str | None
@@ -187,6 +221,7 @@ class SymbolSnapshot:
     regime_effective: RegimeEffectiveSnapshot | None = None
     analysis: AnalysisSection | None = None
     metrics: MetricsSnapshot | None = None
+    belief: BeliefSnapshot | None = None
 
 
 @dataclass(frozen=True)

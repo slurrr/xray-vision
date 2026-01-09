@@ -1,19 +1,32 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from consumers.analysis_engine import AnalysisEngine, AnalysisEngineConfig
 from consumers.analysis_engine.contracts import AnalysisEngineEvent
+from consumers.analysis_engine.observability import NullMetrics as AnalysisNullMetrics
+from consumers.analysis_engine.observability import Observability as AnalysisObservability
+from consumers.analysis_engine.observability import StdlibLogger as AnalysisStdlibLogger
 from consumers.analysis_engine.registry import ModuleRegistry
 from consumers.dashboards import DashboardBuilder, TuiRenderer
+from consumers.dashboards.observability import NullMetrics as DashNullMetrics
+from consumers.dashboards.observability import Observability as DashObservability
+from consumers.dashboards.observability import StdlibLogger as DashStdlibLogger
 from consumers.state_gate import StateGateConfig, StateGateProcessor
 from consumers.state_gate.config import OperationLimits
 from consumers.state_gate.contracts import StateGateEvent
+from consumers.state_gate.observability import NullMetrics as GateNullMetrics
+from consumers.state_gate.observability import Observability as GateObservability
+from consumers.state_gate.observability import StdlibLogger as GateStdlibLogger
 from market_data.contracts import RawMarketEvent
 from orchestrator.buffer import RawInputBuffer
 from orchestrator.contracts import ENGINE_MODE_TRUTH, CutKind, EngineMode, OrchestratorEvent
 from orchestrator.cuts import CutSelector
 from orchestrator.engine_runner import EngineRunner
+from orchestrator.observability import NullMetrics as OrchestratorNullMetrics
+from orchestrator.observability import Observability as OrchestratorObservability
+from orchestrator.observability import StdlibLogger as OrchestratorStdlibLogger
 from orchestrator.publisher import (
     OrchestratorEventPublisher,
     build_engine_run_completed,
@@ -37,12 +50,23 @@ class BusEventSink:
 
 class OrchestratorRuntime:
     def __init__(
-        self, *, bus: EventBus, engine_mode: EngineMode = ENGINE_MODE_TRUTH
+        self,
+        *,
+        bus: EventBus,
+        engine_mode: EngineMode = ENGINE_MODE_TRUTH,
+        observability: OrchestratorObservability | None = None,
     ) -> None:
         self._buffer = RawInputBuffer(max_records=50_000)
         self._cut_selector = CutSelector()
         self._engine_mode: EngineMode = engine_mode
-        self._engine_runner = EngineRunner(engine_mode=engine_mode)
+        self._observability = observability or OrchestratorObservability(
+            logger=OrchestratorStdlibLogger(logging.getLogger("orchestrator")),
+            metrics=OrchestratorNullMetrics(),
+        )
+        self._engine_runner = EngineRunner(
+            engine_mode=engine_mode,
+            observability=self._observability,
+        )
         self._publisher = OrchestratorEventPublisher(
             sink=BusEventSink(bus), sequencer=SymbolSequencer()
         )
@@ -159,6 +183,9 @@ class DashboardRuntime:
     def stop(self) -> None:
         self._renderer.stop()
 
+    def render_once(self) -> None:
+        self._render()
+
     def handle_orchestrator(self, event: OrchestratorEvent) -> None:
         self._builder.ingest_orchestrator_event(event)
         self._render()
@@ -185,7 +212,13 @@ class RuntimeWiring:
 
 
 def build_runtime(bus: EventBus) -> RuntimeWiring:
-    orchestrator = OrchestratorRuntime(bus=bus)
+    orchestrator = OrchestratorRuntime(
+        bus=bus,
+        observability=OrchestratorObservability(
+            logger=OrchestratorStdlibLogger(logging.getLogger("orchestrator")),
+            metrics=OrchestratorNullMetrics(),
+        ),
+    )
     state_gate = StateGateProcessor(
         config=StateGateConfig(
             max_gap_ms=60_000,
@@ -194,14 +227,29 @@ def build_runtime(bus: EventBus) -> RuntimeWiring:
             input_limits=OperationLimits(max_pending=1_000),
             persistence_limits=OperationLimits(max_pending=1_000),
             publish_limits=OperationLimits(max_pending=1_000),
-        )
+        ),
+        observability=GateObservability(
+            logger=GateStdlibLogger(logging.getLogger("consumers.state_gate")),
+            metrics=GateNullMetrics(),
+        ),
     )
     registry = ModuleRegistry(modules=())
     analysis_engine = AnalysisEngine(
         registry=registry,
         config=AnalysisEngineConfig(enabled_modules=(), module_configs=()),
+        observability=AnalysisObservability(
+            logger=AnalysisStdlibLogger(logging.getLogger("consumers.analysis_engine")),
+            metrics=AnalysisNullMetrics(),
+        ),
     )
-    dashboards = DashboardRuntime(builder=DashboardBuilder(), renderer=TuiRenderer())
+    dashboards_observability = DashObservability(
+        logger=DashStdlibLogger(logging.getLogger("consumers.dashboards")),
+        metrics=DashNullMetrics(),
+    )
+    dashboards = DashboardRuntime(
+        builder=DashboardBuilder(observability=dashboards_observability),
+        renderer=TuiRenderer(observability=dashboards_observability),
+    )
     return RuntimeWiring(
         orchestrator=orchestrator,
         state_gate=state_gate,

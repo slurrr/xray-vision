@@ -4,7 +4,12 @@ import sys
 from collections.abc import Iterable
 from io import TextIOBase
 
-from .contracts import DashboardViewModel, HysteresisSnapshot, SymbolSnapshot
+from .contracts import (
+    BeliefSnapshot,
+    DashboardViewModel,
+    HysteresisSnapshot,
+    SymbolSnapshot,
+)
 from .observability import NullLogger, NullMetrics, Observability
 from .renderer import DashboardRenderer, validate_renderer_input
 
@@ -106,6 +111,8 @@ def _render_symbol(symbol: SymbolSnapshot) -> Iterable[str]:
 
     if symbol.hysteresis is not None:
         yield from _render_hysteresis(symbol.hysteresis)
+    if symbol.belief is not None:
+        yield from _render_belief(symbol.belief)
 
     if symbol.analysis is not None:
         analysis = symbol.analysis
@@ -152,3 +159,13 @@ def _render_hysteresis(hysteresis: HysteresisSnapshot) -> Iterable[str]:
         )
         if summary.notes:
             yield f"  notes={', '.join(summary.notes)}"
+
+
+def _render_belief(belief: BeliefSnapshot) -> Iterable[str]:
+    yield f" belief_anchor={belief.anchor_regime}"
+    yield f" belief_trend={belief.trend.status} delta={belief.trend.anchor_mass_delta}"
+    if belief.distribution:
+        parts = [
+            f"{entry.regime_name}={entry.mass:.4f}" for entry in belief.distribution
+        ]
+        yield f" belief_distribution={'; '.join(parts)}"

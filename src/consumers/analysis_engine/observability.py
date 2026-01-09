@@ -37,6 +37,18 @@ class NullLogger:
 
 
 @dataclass(frozen=True)
+class StdlibLogger:
+    logger: logging.Logger
+
+    def log(
+        self, level: int, message: str, fields: Mapping[str, object]
+    ) -> None:  # pragma: no cover - passthrough
+        self.logger.log(level, message, extra={"fields": dict(fields)})
+
+
+
+
+@dataclass(frozen=True)
 class NullMetrics:
     def increment(
         self, name: str, value: int = 1, tags: Mapping[str, str] | None = None

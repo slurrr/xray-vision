@@ -102,6 +102,23 @@ class Observability:
             },
         )
 
+    def log_engine_invocation(
+        self,
+        *,
+        symbol: str,
+        engine_timestamp_ms: int,
+        embedded_evidence_present: bool,
+    ) -> None:
+        self.logger.log(
+            logging.INFO,
+            "orchestrator.engine.invoke",
+            {
+                "symbol": symbol,
+                "engine_timestamp_ms": engine_timestamp_ms,
+                "embedded_evidence_present": embedded_evidence_present,
+            },
+        )
+
     def log_failure(
         self,
         *,

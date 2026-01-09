@@ -23,6 +23,7 @@ Optional per-symbol sections (additive only):
 - regime_effective: regime_name, confidence, drivers, invalidations, permissions, source (truth | hysteresis)
 - analysis: status (EMPTY | PARTIAL | PRESENT), highlights (lexicographic), artifacts (ordered by artifact_kind, module_id, artifact_name)
 - metrics: atr_pct, atr_rank, range_24h_pct, range_session_pct, volume_24h, volume_rank, relative_volume, relative_strength
+- belief: anchor_regime, distribution (ordered by mass desc, regime_name asc), trend (status, anchor_mass_delta)
 
 Deterministic ordering:
 - symbols by symbol
