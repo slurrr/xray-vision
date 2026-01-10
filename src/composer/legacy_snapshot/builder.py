@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import fields
 from typing import Any
 
-from composer.contracts.feature_snapshot import FeatureSnapshot
+from composer.contracts.feature_snapshot import FeatureSnapshot, feature_value
 from composer.engine_evidence.embedding import embed_engine_evidence
 from market_data.contracts import RawMarketEvent
 from regime_engine.contracts.snapshots import (
@@ -95,17 +95,17 @@ def _build_from_features(
 ) -> RegimeInputSnapshot:
     features = feature_snapshot.features
     market = MarketSnapshot(
-        price=_feature_or_missing(features, "price"),
-        vwap=_feature_or_missing(features, "vwap"),
-        atr=_feature_or_missing(features, "atr"),
-        atr_z=_feature_or_missing(features, "atr_z"),
+        price=_feature_or_missing(features, "price_last"),
+        vwap=_feature_or_missing(features, "vwap_3m"),
+        atr=_feature_or_missing(features, "atr_14"),
+        atr_z=_feature_or_missing(features, "atr_z_50"),
         range_expansion=MISSING,
         structure_levels={},
         acceptance_score=MISSING,
         sweep_score=MISSING,
     )
     derivatives = DerivativesSnapshot(
-        open_interest=_feature_or_missing(features, "open_interest"),
+        open_interest=_feature_or_missing(features, "open_interest_latest"),
         oi_slope_short=MISSING,
         oi_slope_med=MISSING,
         oi_accel=MISSING,
@@ -115,7 +115,7 @@ def _build_from_features(
         liquidation_intensity=MISSING,
     )
     flow = FlowSnapshot(
-        cvd=_feature_or_missing(features, "cvd"),
+        cvd=_feature_or_missing(features, "cvd_3m"),
         cvd_slope=MISSING,
         cvd_efficiency=MISSING,
         aggressive_volume_ratio=MISSING,
@@ -141,7 +141,7 @@ def _feature_or_missing(
     features: Mapping[str, float | None],
     key: str,
 ) -> float | Any:
-    value = features.get(key)
+    value = feature_value(features, key)
     if value is None:
         return MISSING
     return value

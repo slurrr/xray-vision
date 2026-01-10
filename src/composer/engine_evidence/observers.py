@@ -4,7 +4,7 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from composer.contracts.feature_snapshot import FeatureSnapshot
+from composer.contracts.feature_snapshot import FeatureSnapshot, feature_value
 from regime_engine.contracts.regimes import Regime
 from regime_engine.state.evidence import EvidenceOpinion
 
@@ -42,15 +42,15 @@ def availability_confidence(
         return 0.0
     available = 0
     for key in required_keys:
-        value = features.get(key)
+        value = feature_value(features, key)
         if value is not None and _is_finite_number(value):
             available += 1
     return available / required_count
 
 
 def flow_ratio(features: Mapping[str, float | None]) -> float | None:
-    cvd = _as_float(features.get("cvd"))
-    open_interest = _as_float(features.get("open_interest"))
+    cvd = _as_float(feature_value(features, "cvd"))
+    open_interest = _as_float(feature_value(features, "open_interest"))
     if cvd is None or open_interest is None:
         return None
     if open_interest <= 0.0:
@@ -59,8 +59,8 @@ def flow_ratio(features: Mapping[str, float | None]) -> float | None:
 
 
 def trend_sign(features: Mapping[str, float | None]) -> int | None:
-    price = _as_float(features.get("price"))
-    vwap = _as_float(features.get("vwap"))
+    price = _as_float(feature_value(features, "price"))
+    vwap = _as_float(feature_value(features, "vwap"))
     if price is None or vwap is None:
         return None
     if price > vwap:
@@ -95,7 +95,7 @@ class ClassicalRegimeObserver(EngineEvidenceObserver):
 
     def emit(self, snapshot: FeatureSnapshot) -> Sequence[EvidenceOpinion]:
         features = snapshot.features
-        vol = _as_float(features.get("atr_z"))
+        vol = _as_float(feature_value(features, "atr_z"))
         fr = flow_ratio(features)
         ts = trend_sign(features)
 
@@ -152,7 +152,7 @@ class FlowPressureObserver(EngineEvidenceObserver):
             return ()
 
         direction_up = fr > 0
-        vol = _as_float(features.get("atr_z"))
+        vol = _as_float(feature_value(features, "atr_z"))
 
         if vol is not None and vol >= 1.5 and abs(fr) >= 0.02:
             regime = Regime.LIQUIDATION_UP if direction_up else Regime.LIQUIDATION_DOWN
@@ -178,7 +178,7 @@ class VolatilityContextObserver(EngineEvidenceObserver):
 
     def emit(self, snapshot: FeatureSnapshot) -> Sequence[EvidenceOpinion]:
         features = snapshot.features
-        vol = _as_float(features.get("atr_z"))
+        vol = _as_float(feature_value(features, "atr_z"))
         if vol is None:
             return ()
 

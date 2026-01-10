@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -149,7 +150,7 @@ def advance_hysteresis(
             anchor_regime = candidate_regime
             candidate_regime = None
             progress = 0
-            last_commit = regime_state.engine_timestamp_ms
+            last_commit = int(time.time() * 1000)
         else:
             reasons.append("COMMIT_BLOCKED_THRESHOLD")
 

@@ -74,6 +74,65 @@ class Observability:
     logger: StructuredLogger
     metrics: MetricsRecorder
 
+    def log_state_loaded(
+        self,
+        *,
+        symbol: str,
+        run_id: str,
+        engine_timestamp_ms: int,
+        last_seen_timestamp_ms: int | None,
+    ) -> None:
+        self.logger.log(
+            logging.INFO,
+            "state_gate.state_loaded",
+            {
+                "symbol": symbol,
+                "run_id": run_id,
+                "engine_timestamp_ms": engine_timestamp_ms,
+                "last_seen_timestamp_ms": last_seen_timestamp_ms,
+            },
+        )
+
+    def log_state_reset(
+        self,
+        *,
+        symbol: str,
+        run_id: str,
+        engine_timestamp_ms: int,
+        reset_reason: str,
+        last_seen_timestamp_ms: int | None,
+    ) -> None:
+        self.logger.log(
+            logging.INFO,
+            "state_gate.state_reset",
+            {
+                "symbol": symbol,
+                "run_id": run_id,
+                "engine_timestamp_ms": engine_timestamp_ms,
+                "reset_reason": reset_reason,
+                "last_seen_timestamp_ms": last_seen_timestamp_ms,
+            },
+        )
+
+    def log_state_continuity_ok(
+        self,
+        *,
+        symbol: str,
+        run_id: str,
+        engine_timestamp_ms: int,
+        last_seen_timestamp_ms: int | None,
+    ) -> None:
+        self.logger.log(
+            logging.INFO,
+            "state_gate.state_continuity_ok",
+            {
+                "symbol": symbol,
+                "run_id": run_id,
+                "engine_timestamp_ms": engine_timestamp_ms,
+                "last_seen_timestamp_ms": last_seen_timestamp_ms,
+            },
+        )
+
     def log_event(self, event: StateGateEvent) -> None:
         fields: dict[str, object] = {
             "symbol": event.symbol,

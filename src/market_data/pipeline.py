@@ -11,7 +11,7 @@ from market_data.contracts import (
     SCHEMA_VERSION,
     RawMarketEvent,
 )
-from market_data.observability import Observability
+from market_data.observability import Observability, get_observability
 from market_data.sink import BackpressureError, RawEventSink
 
 ClockMs = Callable[[], int]
@@ -95,3 +95,7 @@ def _validate_required_normalized_keys(event_type: str, normalized: Mapping[str,
     if missing:
         missing_list = ", ".join(sorted(missing))
         raise ValueError(f"missing normalized keys for {event_type}: {missing_list}")
+
+
+def emit_cadence_summary(symbol: str) -> None:
+    get_observability().log_cadence_summary(symbol=symbol)

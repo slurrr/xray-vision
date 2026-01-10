@@ -26,7 +26,7 @@ from regime_engine.contracts.snapshots import (
     MarketSnapshot,
     RegimeInputSnapshot,
 )
-from regime_engine.state.evidence import EvidenceSnapshot
+from regime_engine.state.evidence import EvidenceOpinion, EvidenceSnapshot
 
 
 def _feature_snapshot(values: dict[str, float | None]) -> FeatureSnapshot:
@@ -41,6 +41,26 @@ def _feature_snapshot(values: dict[str, float | None]) -> FeatureSnapshot:
 
 
 class TestEngineEvidenceObservers(unittest.TestCase):
+    def test_classical_regime_confidence_zero_with_missing_inputs(self) -> None:
+        observer = ClassicalRegimeObserver(
+            observer_id="classical_regime_v1",
+            source_id="composer:classical_regime_v1",
+        )
+        snapshot = _feature_snapshot({})
+        opinions = observer.emit(snapshot)
+        self.assertEqual(len(opinions), 1)
+        self.assertAlmostEqual(opinions[0].confidence, 0.0)
+
+    def test_classical_regime_confidence_ratio(self) -> None:
+        observer = ClassicalRegimeObserver(
+            observer_id="classical_regime_v1",
+            source_id="composer:classical_regime_v1",
+        )
+        snapshot = _feature_snapshot({"price_last": 2.0, "vwap_3m": 1.0})
+        opinions = observer.emit(snapshot)
+        self.assertEqual(len(opinions), 1)
+        self.assertAlmostEqual(opinions[0].confidence, 0.4)
+
     def test_classical_regime_emits_one(self) -> None:
         observer = ClassicalRegimeObserver(
             observer_id="classical_regime_v1",
@@ -48,11 +68,11 @@ class TestEngineEvidenceObservers(unittest.TestCase):
         )
         snapshot = _feature_snapshot(
             {
-                "price": 2.0,
-                "vwap": 1.0,
-                "atr_z": 2.0,
-                "cvd": 10.0,
-                "open_interest": 1000.0,
+                "price_last": 2.0,
+                "vwap_3m": 1.0,
+                "atr_z_50": 2.0,
+                "cvd_3m": 10.0,
+                "open_interest_latest": 1000.0,
             }
         )
         opinions = observer.emit(snapshot)
@@ -68,7 +88,7 @@ class TestEngineEvidenceObservers(unittest.TestCase):
             observer_id="flow_pressure_v1",
             source_id="composer:flow_pressure_v1",
         )
-        snapshot = _feature_snapshot({"cvd": 1.0, "open_interest": 1000.0})
+        snapshot = _feature_snapshot({"cvd_3m": 1.0, "open_interest_latest": 1000.0})
         self.assertEqual(observer.emit(snapshot), ())
 
     def test_flow_pressure_liquidation(self) -> None:
@@ -76,7 +96,9 @@ class TestEngineEvidenceObservers(unittest.TestCase):
             observer_id="flow_pressure_v1",
             source_id="composer:flow_pressure_v1",
         )
-        snapshot = _feature_snapshot({"cvd": 10.0, "open_interest": 100.0, "atr_z": 2.0})
+        snapshot = _feature_snapshot(
+            {"cvd_3m": 10.0, "open_interest_latest": 100.0, "atr_z_50": 2.0}
+        )
         opinions = observer.emit(snapshot)
         self.assertEqual(len(opinions), 1)
         opinion = opinions[0]
@@ -89,7 +111,7 @@ class TestEngineEvidenceObservers(unittest.TestCase):
             observer_id="volatility_context_v1",
             source_id="composer:volatility_context_v1",
         )
-        snapshot = _feature_snapshot({"atr_z": 0.1})
+        snapshot = _feature_snapshot({"atr_z_50": 0.1})
         opinions = observer.emit(snapshot)
         self.assertEqual(len(opinions), 1)
         opinion = opinions[0]
@@ -100,16 +122,47 @@ class TestEngineEvidenceObservers(unittest.TestCase):
     def test_ordering_is_deterministic(self) -> None:
         snapshot = _feature_snapshot(
             {
-                "price": 2.0,
-                "vwap": 1.0,
-                "atr_z": 2.0,
-                "cvd": 10.0,
-                "open_interest": 100.0,
+                "price_last": 2.0,
+                "vwap_3m": 1.0,
+                "atr_z_50": 2.0,
+                "cvd_3m": 10.0,
+                "open_interest_latest": 100.0,
             }
         )
         evidence = compute_engine_evidence_snapshot(snapshot)
         ordered = order_engine_evidence_opinions(evidence.opinions)
         self.assertEqual(tuple(ordered), evidence.opinions)
+
+    def test_ordering_is_stable_for_shuffled_inputs(self) -> None:
+        opinions = [
+            EvidenceOpinion(
+                regime=Regime.TREND_BUILD_UP,
+                strength=0.2,
+                confidence=0.4,
+                source="b",
+            ),
+            EvidenceOpinion(
+                regime=Regime.CHOP_BALANCED,
+                strength=0.9,
+                confidence=0.1,
+                source="a",
+            ),
+            EvidenceOpinion(
+                regime=Regime.CHOP_BALANCED,
+                strength=0.5,
+                confidence=0.9,
+                source="a",
+            ),
+        ]
+        ordered = order_engine_evidence_opinions(opinions)
+        self.assertEqual(
+            [opinion.regime for opinion in ordered],
+            [Regime.CHOP_BALANCED, Regime.CHOP_BALANCED, Regime.TREND_BUILD_UP],
+        )
+        self.assertEqual(
+            [opinion.confidence for opinion in ordered[:2]],
+            [0.9, 0.1],
+        )
 
     def test_embedding_omits_empty(self) -> None:
         evidence = EvidenceSnapshot(
@@ -124,11 +177,11 @@ class TestEngineEvidenceObservers(unittest.TestCase):
     def test_embedding_inserts_payload(self) -> None:
         snapshot = _feature_snapshot(
             {
-                "price": 2.0,
-                "vwap": 1.0,
-                "atr_z": 2.0,
-                "cvd": 10.0,
-                "open_interest": 100.0,
+                "price_last": 2.0,
+                "vwap_3m": 1.0,
+                "atr_z_50": 2.0,
+                "cvd_3m": 10.0,
+                "open_interest_latest": 100.0,
             }
         )
         evidence = compute_engine_evidence_snapshot(snapshot)

@@ -95,7 +95,7 @@ def _setup_logging(*, log_dir: str) -> None:
         handlers=[handler],
     )
     logging.getLogger("orchestrator").setLevel(logging.DEBUG)
-    logging.getLogger("market_data").setLevel(logging.WARNING)
+    logging.getLogger("market_data").setLevel(logging.INFO)
     logging.getLogger("consumers").setLevel(logging.DEBUG)
     logging.getLogger("runtime").setLevel(logging.DEBUG)
     logging.getLogger("composer").setLevel(logging.DEBUG)

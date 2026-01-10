@@ -24,7 +24,7 @@ from orchestrator.contracts import (
     RawInputBufferRecord,
 )
 from orchestrator.cuts import Cut, CutSelector
-from orchestrator.engine_runner import EngineRunner, HysteresisStateLog
+from orchestrator.engine_runner import EngineRunner
 from orchestrator.failure_handling import (
     BackpressureState,
     BufferAppendFailure,
@@ -82,7 +82,6 @@ __all__ = [
     "Cut",
     "CutSelector",
     "EngineRunner",
-    "HysteresisStateLog",
     "BackpressureState",
     "BufferAppendFailure",
     "EngineRunFailure",

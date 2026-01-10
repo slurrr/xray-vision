@@ -161,6 +161,7 @@ class DashboardBuilder:
         self._symbols: dict[str, _SymbolState] = {}
         self._telemetry = _TelemetryState()
         self._latest_source: tuple[int, str] | None = None
+        self._last_logged_source: tuple[int, str] | None = None
         self._time_fn = time_fn or (lambda: int(time.time() * 1000))
         self._observability = observability or Observability(
             logger=NullLogger(), metrics=NullMetrics()
@@ -180,7 +181,8 @@ class DashboardBuilder:
         try:
             self._telemetry.last_orchestrator_event_ts_ms = event.engine_timestamp_ms
             symbol_state = self._symbol_state(event.symbol)
-            self._track_source(event.run_id, event.engine_timestamp_ms)
+            if event.event_type == "EngineRunCompleted":
+                self._track_source(event.run_id, event.engine_timestamp_ms)
             symbol_state.track_run(event.run_id, event.engine_timestamp_ms)
 
             if event.event_type == "EngineRunCompleted" and isinstance(
@@ -411,10 +413,18 @@ class DashboardBuilder:
         )
         latency_ms = max(0, self._time_fn() - start_time)
         builder_lag_ms = _builder_lag(as_of_ts_ms=as_of, telemetry=telemetry)
-        self._observability.log_snapshot(snapshot, latency_ms=latency_ms)
-        self._observability.record_snapshot_metrics(
-            latency_ms=latency_ms, builder_lag_ms=builder_lag_ms
-        )
+        if source_engine_timestamp_ms is not None and source_run_id is not None:
+            current_source = (source_engine_timestamp_ms, source_run_id)
+            should_log = (
+                self._last_logged_source is None
+                or current_source != self._last_logged_source
+            )
+            if should_log:
+                self._observability.log_snapshot(snapshot, latency_ms=latency_ms)
+                self._observability.record_snapshot_metrics(
+                    latency_ms=latency_ms, builder_lag_ms=builder_lag_ms
+                )
+                self._last_logged_source = current_source
         return snapshot
 
     def _build_symbol_snapshot(self, symbol_state: _SymbolState) -> SymbolSnapshot:

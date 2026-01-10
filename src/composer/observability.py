@@ -47,6 +47,27 @@ class Observability:
             },
         )
 
+    def log_opinion_provenance(
+        self,
+        *,
+        symbol: str,
+        engine_timestamp_ms: int,
+        opinion_count: int,
+        opinions: Sequence[Mapping[str, object]],
+        feature_digest: Mapping[str, object],
+    ) -> None:
+        self.logger.log(
+            logging.INFO,
+            "composer.evidence.provenance",
+            {
+                "symbol": symbol,
+                "engine_timestamp_ms": engine_timestamp_ms,
+                "opinion_count": opinion_count,
+                "opinions": list(opinions),
+                "feature_digest": dict(feature_digest),
+            },
+        )
+
     def log_embed_decision(
         self,
         *,

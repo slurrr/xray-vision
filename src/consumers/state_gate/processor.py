@@ -15,6 +15,7 @@ from .contracts import (
     StateGateHaltedPayload,
     StateGateSnapshot,
     StateGateStateRecord,
+    StateResetPayload,
 )
 from .evaluation import GateEvaluator
 from .observability import HealthStatus, NullLogger, NullMetrics, Observability
@@ -55,8 +56,42 @@ class StateGateProcessor:
         if assembled is None:
             return []
         previous_snapshot = self._store.snapshot_for(assembled.symbol)
+        self._observability.log_state_loaded(
+            symbol=assembled.symbol,
+            run_id=assembled.run_id,
+            engine_timestamp_ms=assembled.engine_timestamp_ms,
+            last_seen_timestamp_ms=previous_snapshot.last_engine_timestamp_ms,
+        )
         evaluation = self._evaluator.evaluate(assembled)
         events = self._state_machine.process_run(assembled, evaluation)
+        reset_event = next(
+            (
+                state_event
+                for state_event in events
+                if state_event.event_type == "StateReset"
+            ),
+            None,
+        )
+        if reset_event is not None:
+            reset_reason = (
+                reset_event.payload.reset_reason
+                if isinstance(reset_event.payload, StateResetPayload)
+                else "unknown"
+            )
+            self._observability.log_state_reset(
+                symbol=reset_event.symbol,
+                run_id=reset_event.run_id,
+                engine_timestamp_ms=reset_event.engine_timestamp_ms,
+                reset_reason=reset_reason,
+                last_seen_timestamp_ms=previous_snapshot.last_engine_timestamp_ms,
+            )
+        else:
+            self._observability.log_state_continuity_ok(
+                symbol=assembled.symbol,
+                run_id=assembled.run_id,
+                engine_timestamp_ms=assembled.engine_timestamp_ms,
+                last_seen_timestamp_ms=previous_snapshot.last_engine_timestamp_ms,
+            )
         if self._publish_blocked(len(events)):
             halt_event = self._enter_halted(
                 symbol=assembled.symbol,

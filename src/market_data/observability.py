@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from market_data.adapter import StreamKey
@@ -59,12 +59,74 @@ class NullMetrics:
         return None
 
 
+@dataclass
+class _SymbolCadenceStats:
+    raw_events_ingested: int = 0
+    decode_failures: int = 0
+    first_event_timestamp_ms: int | None = None
+    last_event_timestamp_ms: int | None = None
+
+    def record(self, *, event_type: str, event_timestamp_ms: int) -> None:
+        if event_type == "DecodeFailure":
+            self.decode_failures += 1
+        else:
+            self.raw_events_ingested += 1
+        if self.first_event_timestamp_ms is None:
+            self.first_event_timestamp_ms = event_timestamp_ms
+        self.last_event_timestamp_ms = event_timestamp_ms
+
+
+@dataclass
+class MarketDataHealthTracker:
+    _symbol_stats: dict[str, _SymbolCadenceStats] = field(default_factory=dict)
+    _adapter_states: dict[str, str] = field(default_factory=dict)
+
+    def record_event(self, event: RawMarketEvent) -> None:
+        symbol = event.symbol
+        stats = self._symbol_stats.setdefault(symbol, _SymbolCadenceStats())
+        event_timestamp_ms = event.exchange_ts_ms or event.recv_ts_ms
+        stats.record(event_type=event.event_type, event_timestamp_ms=event_timestamp_ms)
+
+    def record_transport_state(self, *, stream_key: StreamKey, state: str) -> None:
+        self._adapter_states[_stream_key_id(stream_key)] = state
+
+    def snapshot_and_reset(self, symbol: str) -> dict[str, object]:
+        stats = self._symbol_stats.pop(symbol, _SymbolCadenceStats())
+        adapter_status = _adapter_status_for_symbol(symbol, self._adapter_states)
+        return {
+            "raw_events_ingested": stats.raw_events_ingested,
+            "decode_failures": stats.decode_failures,
+            "first_event_timestamp_ms": stats.first_event_timestamp_ms,
+            "last_event_timestamp_ms": stats.last_event_timestamp_ms,
+            "adapter_status": adapter_status,
+        }
+
+
+def _stream_key_id(stream_key: StreamKey) -> str:
+    symbol = stream_key.symbol or ""
+    return f"{stream_key.source_id}:{stream_key.channel}:{symbol}"
+
+
+def _adapter_status_for_symbol(
+    symbol: str, adapter_states: Mapping[str, str]
+) -> str:
+    if not adapter_states:
+        return "disconnected"
+    target = f":{symbol}"
+    for key, state in adapter_states.items():
+        if key.endswith(target) and state == "connected":
+            return "connected"
+    return "disconnected"
+
+
 @dataclass(frozen=True)
 class Observability:
     logger: StructuredLogger
     metrics: MetricsRecorder
+    health: MarketDataHealthTracker = field(default_factory=MarketDataHealthTracker)
 
     def record_event(self, event: RawMarketEvent) -> None:
+        self.health.record_event(event)
         if event.event_type == "DecodeFailure":
             self.log_decode_failure(event)
             self.record_decode_failure_metrics(event)
@@ -75,7 +137,7 @@ class Observability:
 
     def log_event(self, event: RawMarketEvent) -> None:
         self.logger.log(
-            logging.INFO,
+            logging.DEBUG,
             "market_data.event",
             {
                 "source_id": event.source_id,
@@ -88,7 +150,7 @@ class Observability:
 
     def log_decode_failure(self, event: RawMarketEvent) -> None:
         self.logger.log(
-            logging.WARNING,
+            logging.DEBUG,
             "market_data.decode_failure",
             {
                 "source_id": event.source_id,
@@ -109,6 +171,7 @@ class Observability:
         reconnect_count: int | None = None,
         error: str | None = None,
     ) -> None:
+        self.health.record_transport_state(stream_key=stream_key, state=state)
         fields: dict[str, object] = {
             "source_id": stream_key.source_id,
             "symbol": stream_key.symbol,
@@ -177,3 +240,22 @@ class Observability:
             },
             value=reconnect_count,
         )
+
+    def log_cadence_summary(self, *, symbol: str) -> None:
+        fields = {
+            "symbol": symbol,
+            **self.health.snapshot_and_reset(symbol),
+        }
+        self.logger.log(logging.INFO, "market_data.cadence_summary", fields)
+
+
+_OBSERVABILITY = Observability(logger=NullLogger(), metrics=NullMetrics())
+
+
+def set_observability(observability: Observability) -> None:
+    global _OBSERVABILITY
+    _OBSERVABILITY = observability
+
+
+def get_observability() -> Observability:
+    return _OBSERVABILITY

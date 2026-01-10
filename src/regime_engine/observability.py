@@ -100,6 +100,43 @@ class Observability:
             },
         )
 
+    def log_hysteresis_decision(
+        self,
+        *,
+        symbol: str,
+        engine_timestamp_ms: int,
+        prior_anchor_regime: Regime | None,
+        candidate_regime: Regime | None,
+        selected_regime: Regime,
+        decision: str,
+        window_size: int,
+        confirmation_count: int,
+        threshold: float,
+        belief_margin: float | None,
+        reason_code: str,
+    ) -> None:
+        self.logger.log(
+            logging.INFO,
+            "regime_engine.hysteresis_decision",
+            {
+                "symbol": symbol,
+                "engine_timestamp_ms": engine_timestamp_ms,
+                "prior_anchor_regime": (
+                    prior_anchor_regime.value if prior_anchor_regime is not None else None
+                ),
+                "candidate_regime": (
+                    candidate_regime.value if candidate_regime is not None else None
+                ),
+                "selected_regime": selected_regime.value,
+                "decision": decision,
+                "window_size": window_size,
+                "confirmation_count": confirmation_count,
+                "threshold": threshold,
+                "belief_margin": belief_margin,
+                "reason_code": reason_code,
+            },
+        )
+
 
 _OBSERVABILITY = Observability(logger=NullLogger())
 

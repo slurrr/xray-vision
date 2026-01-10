@@ -1,6 +1,7 @@
 import unittest
 
 from composer.contracts.feature_snapshot import (
+    FEATURE_KEY_ALIASES,
     FEATURE_KEYS_V1,
     SCHEMA_NAME,
     SCHEMA_VERSION,
@@ -17,6 +18,9 @@ from regime_engine.state.evidence import EvidenceOpinion, EvidenceSnapshot
 
 def _feature_snapshot(values: dict[str, float | None]) -> FeatureSnapshot:
     features = {key: values.get(key) for key in FEATURE_KEYS_V1}
+    for alias, _canonical in FEATURE_KEY_ALIASES.items():
+        if alias in values:
+            features[alias] = values[alias]
     return FeatureSnapshot(
         schema=SCHEMA_NAME,
         schema_version=SCHEMA_VERSION,
@@ -82,12 +86,12 @@ class TestLegacySnapshotBuilder(unittest.TestCase):
     def test_fallback_from_features(self) -> None:
         feature_snapshot = _feature_snapshot(
             {
-                "price": 1.2,
-                "vwap": 1.0,
-                "atr": 0.5,
-                "atr_z": 0.2,
-                "cvd": 10.0,
-                "open_interest": 20.0,
+                "price_last": 1.2,
+                "vwap_3m": 1.0,
+                "atr_14": 0.5,
+                "atr_z_50": 0.2,
+                "cvd_3m": 10.0,
+                "open_interest_latest": 20.0,
             }
         )
         evidence = EvidenceSnapshot(
@@ -111,6 +115,59 @@ class TestLegacySnapshotBuilder(unittest.TestCase):
         self.assertEqual(legacy.market.range_expansion, MISSING)
         self.assertEqual(legacy.flow.cvd_slope, MISSING)
         self.assertNotIn("composer_evidence_snapshot_v1", legacy.market.structure_levels)
+
+    def test_empty_features_keep_embedding_when_classical_present(self) -> None:
+        feature_snapshot = _feature_snapshot({})
+        evidence = EvidenceSnapshot(
+            symbol="TEST",
+            engine_timestamp_ms=180_000,
+            opinions=(
+                EvidenceOpinion(
+                    regime=Regime.CHOP_BALANCED,
+                    strength=0.0,
+                    confidence=0.0,
+                    source="composer:classical_regime_v1",
+                ),
+            ),
+        )
+        legacy = build_legacy_snapshot(
+            (),
+            symbol="TEST",
+            engine_timestamp_ms=180_000,
+            feature_snapshot=feature_snapshot,
+            evidence_snapshot=evidence,
+        )
+        self.assertIn("composer_evidence_snapshot_v1", legacy.market.structure_levels)
+
+    def test_alias_fallback_reads_legacy_keys(self) -> None:
+        feature_snapshot = _feature_snapshot(
+            {
+                "price": 1.1,
+                "vwap": 1.0,
+                "atr": 0.5,
+                "atr_z": 0.2,
+                "cvd": 5.0,
+                "open_interest": 10.0,
+            }
+        )
+        evidence = EvidenceSnapshot(
+            symbol="TEST",
+            engine_timestamp_ms=180_000,
+            opinions=(),
+        )
+        legacy = build_legacy_snapshot(
+            (),
+            symbol="TEST",
+            engine_timestamp_ms=180_000,
+            feature_snapshot=feature_snapshot,
+            evidence_snapshot=evidence,
+        )
+        self.assertEqual(legacy.market.price, 1.1)
+        self.assertEqual(legacy.market.vwap, 1.0)
+        self.assertEqual(legacy.market.atr, 0.5)
+        self.assertEqual(legacy.market.atr_z, 0.2)
+        self.assertEqual(legacy.derivatives.open_interest, 10.0)
+        self.assertEqual(legacy.flow.cvd, 5.0)
 
 
 if __name__ == "__main__":

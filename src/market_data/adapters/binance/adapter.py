@@ -148,7 +148,7 @@ class _BinanceWsAdapter:
     def _handle_message(self, message: str | bytes) -> None:
         raw_payload: str | bytes = message
         try:
-            text = message if isinstance(message, str) else message.decode("utf-8")
+            text = message if isinstance(message, str) else bytes(message).decode("utf-8")
             data = json.loads(text)
         except Exception as exc:
             self._emit_decode_failure(

@@ -25,9 +25,11 @@ from consumers.state_gate.observability import NullMetrics as GateNullMetrics
 from consumers.state_gate.observability import Observability as GateObservability
 from consumers.state_gate.observability import StdlibLogger as GateStdlibLogger
 from market_data.contracts import RawMarketEvent
+from market_data.pipeline import emit_cadence_summary
 from orchestrator.buffer import RawInputBuffer
 from orchestrator.config import SchedulerConfig
 from orchestrator.contracts import (
+    ENGINE_MODE_HYSTERESIS,
     ENGINE_MODE_TRUTH,
     CutKind,
     EngineMode,
@@ -35,7 +37,12 @@ from orchestrator.contracts import (
     OrchestratorEvent,
 )
 from orchestrator.cuts import CutSelector
-from orchestrator.engine_runner import EngineRunner
+from orchestrator.engine_runner import (
+    EngineRunner,
+    HysteresisMonotonicityError,
+    HysteresisPersistenceError,
+    HysteresisStatePersistence,
+)
 from orchestrator.observability import NullMetrics as OrchestratorNullMetrics
 from orchestrator.observability import Observability as OrchestratorObservability
 from orchestrator.observability import StdlibLogger as OrchestratorStdlibLogger
@@ -50,6 +57,7 @@ from orchestrator.run_id import derive_run_id
 from orchestrator.run_records import EngineRunLog
 from orchestrator.scheduler import Scheduler
 from orchestrator.sequencing import SymbolSequencer
+from regime_engine.hysteresis import HysteresisConfig
 from runtime.bus import EventBus
 
 
@@ -67,6 +75,8 @@ class OrchestratorRuntime:
         *,
         bus: EventBus,
         engine_mode: EngineMode = ENGINE_MODE_TRUTH,
+        hysteresis_state_path: str | None = None,
+        hysteresis_config: HysteresisConfig | None = None,
         observability: OrchestratorObservability | None = None,
         scheduler_config: SchedulerConfig | None = None,
     ) -> None:
@@ -78,8 +88,19 @@ class OrchestratorRuntime:
             logger=OrchestratorStdlibLogger(logging.getLogger("orchestrator")),
             metrics=OrchestratorNullMetrics(),
         )
+        hysteresis_store = None
+        hysteresis_config = hysteresis_config or HysteresisConfig()
+        if engine_mode == ENGINE_MODE_HYSTERESIS:
+            if hysteresis_state_path is None:
+                raise ValueError("hysteresis_state_path is required for hysteresis mode")
+            hysteresis_store = HysteresisStatePersistence.restore(
+                path=hysteresis_state_path,
+                config=hysteresis_config,
+            )
         self._engine_runner = EngineRunner(
             engine_mode=engine_mode,
+            hysteresis_store=hysteresis_store,
+            hysteresis_config=hysteresis_config,
             observability=self._observability,
         )
         self._publisher = OrchestratorEventPublisher(
@@ -130,6 +151,10 @@ class OrchestratorRuntime:
         cut_kind: CutKind = "boundary" if self._scheduler.config.mode == "boundary" else "timer"
         engine_timestamp_ms = _engine_timestamp_ms(self._scheduler.config, planned_ts_ms)
         for symbol in symbols:
+            if self._guard_hysteresis_monotonic(symbol, engine_timestamp_ms):
+                self._scheduler_running = False
+                return
+            emit_cadence_summary(symbol)
             try:
                 cut = self._cut_selector.next_cut(
                     buffer=self._buffer,
@@ -210,6 +235,9 @@ class OrchestratorRuntime:
                 continue
             try:
                 result = self._engine_runner.run_engine(snapshot)
+            except (HysteresisPersistenceError, HysteresisMonotonicityError):
+                self._scheduler_running = False
+                return
             except Exception as exc:
                 failed = build_engine_run_failed(
                     run_id=run_id,
@@ -255,6 +283,19 @@ class OrchestratorRuntime:
                 counts_by_event_type=counts_by_event_type,
             )
             self._publisher.publish(completed)
+
+    def _guard_hysteresis_monotonic(self, symbol: str, engine_timestamp_ms: int) -> bool:
+        if self._engine_mode != ENGINE_MODE_HYSTERESIS:
+            return False
+        store = self._engine_runner.hysteresis_store
+        if store is None:
+            return False
+        prev_state = store.store.state_for(symbol)
+        if prev_state is None:
+            return False
+        if engine_timestamp_ms < prev_state.engine_timestamp_ms:
+            return True
+        return False
 
 
 class DashboardRuntime:
@@ -306,7 +347,7 @@ def build_runtime(bus: EventBus) -> RuntimeWiring:
     )
     state_gate = StateGateProcessor(
         config=StateGateConfig(
-            max_gap_ms=60_000,
+            max_gap_ms=180_000,
             denylisted_invalidations=(),
             block_during_transition=False,
             input_limits=OperationLimits(max_pending=1_000),
