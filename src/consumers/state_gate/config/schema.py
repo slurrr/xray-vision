@@ -7,8 +7,8 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class OperationLimits:
     max_pending: int
-    max_block_ms: int | None = None
-    max_failures: int | None = None
+    max_block_ms: int | None
+    max_failures: int | None
 
 
 @dataclass(frozen=True)

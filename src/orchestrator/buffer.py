@@ -63,6 +63,19 @@ class RawInputBuffer:
             return None
         return self.records[-1].ingest_seq
 
+    def drop_through(self, *, end_seq: int) -> int:
+        if not self.records:
+            return 0
+        kept: list[RawInputBufferRecord] = []
+        dropped = 0
+        for record in self.records:
+            if record.ingest_seq <= end_seq:
+                dropped += 1
+            else:
+                kept.append(record)
+        self.records = kept
+        return dropped
+
 
 def _now_ms() -> int:
     return int(time.time() * 1000)

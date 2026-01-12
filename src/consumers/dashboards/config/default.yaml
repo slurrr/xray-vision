@@ -1,0 +1,6 @@
+refresh_cadence_ms: 0
+default_time_window_ms: 0
+enabled_views:
+  - system
+  - telemetry
+  - symbols

@@ -96,11 +96,27 @@ Phase status (Authoritative):
 
 - Phases 0–3 (belief refoundation): **Frozen**
 - Phase 4 (belief-first hysteresis & memory): **Authorized**
+- Phase 4.1 (evidence matrix) **Authorized**
 - Phases 5–9: **Frozen**
 
-Agents may modify the Regime Engine **only** to implement Phase 4
-as specified in the canonical belief-first architecture.
-All other phases are locked.
+### Temporary Exception — Evidence Matrix (Additive Only)
+
+Purpose:
+Allow additive, non-behavioral scaffolding to support the Evidence × Regime Matrix.
+
+Allowed:
+• New files, types, and pure functions under src/regime_engine/**  
+• Shadow-mode code paths not wired into belief, hysteresis, or resolution  
+• Read-only observers, adapters, or translators
+
+Explicitly Forbidden:
+• Modifying existing behavior, thresholds, or outputs
+• Changing belief updates, hysteresis rules, or regime resolution
+• Removing or altering legacy code
+
+Sunset:
+This exception expires once Evidence Matrix Phase 1–2 are complete.
+Removal of legacy behavior requires a separate, explicit approval.
 
 ---
 

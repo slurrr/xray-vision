@@ -1,16 +1,20 @@
-{
-  "symbol": "BTCUSDT",
-  "backpressure": {
-    "policy": "fail",
-    "max_pending": 10000
-  },
-  "adapters": {
-    "agg_trade": true,
-    "kline": true,
-    "open_interest": true,
-    "book_ticker": false,
-    "depth": false,
-    "mark_price": false,
-    "force_order": false
-  }
-}
+defaults:
+  symbol: BTCUSDT
+  adapters:
+    agg_trade: true
+    kline: true
+    open_interest: true
+    book_ticker: false
+    depth: false
+    mark_price: false
+    force_order: false
+  backpressure:
+    policy: fail
+    max_pending: 10000
+  limits: null
+sources:
+  - source_id: binance
+    symbol_map:
+      BTCUSDT: BTCUSDT
+    channels:
+      - trades

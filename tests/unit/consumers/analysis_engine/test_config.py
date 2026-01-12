@@ -44,6 +44,8 @@ class TestConfigValidation(unittest.TestCase):
 
     def test_valid_config_passes(self) -> None:
         config = AnalysisEngineConfig(
+            enabled=True,
+            thresholds={"placeholder_threshold": 0.0},
             enabled_modules=["signal.a"],
             module_configs=[ModuleConfig(module_id="signal.a", config={"threshold": 1})],
             symbols=[SymbolConfig(symbol="TEST", enabled_modules=["signal.a"])],
@@ -51,23 +53,34 @@ class TestConfigValidation(unittest.TestCase):
         validate_config(config, self.registry)
 
     def test_unknown_enabled_module_fails(self) -> None:
-        config = AnalysisEngineConfig(enabled_modules=["missing"], module_configs=[])
+        config = AnalysisEngineConfig(
+            enabled=True,
+            thresholds={"placeholder_threshold": 0.0},
+            enabled_modules=["missing"],
+            module_configs=[],
+            symbols=[],
+        )
         with self.assertRaises(ValueError):
             validate_config(config, self.registry)
 
     def test_duplicate_module_config_fails(self) -> None:
         config = AnalysisEngineConfig(
+            enabled=True,
+            thresholds={"placeholder_threshold": 0.0},
             enabled_modules=["signal.a"],
             module_configs=[
                 ModuleConfig(module_id="signal.a", config={"a": 1}),
                 ModuleConfig(module_id="signal.a", config={"a": 2}),
             ],
+            symbols=[],
         )
         with self.assertRaises(ValueError):
             validate_config(config, self.registry)
 
     def test_symbol_config_unknown_module_fails(self) -> None:
         config = AnalysisEngineConfig(
+            enabled=True,
+            thresholds={"placeholder_threshold": 0.0},
             enabled_modules=["signal.a"],
             module_configs=[],
             symbols=[SymbolConfig(symbol="TEST", enabled_modules=["missing"])],
@@ -77,8 +90,11 @@ class TestConfigValidation(unittest.TestCase):
 
     def test_non_mapping_module_config_fails(self) -> None:
         config = AnalysisEngineConfig(
+            enabled=True,
+            thresholds={"placeholder_threshold": 0.0},
             enabled_modules=["signal.a"],
             module_configs=[ModuleConfig(module_id="signal.a", config=123)],  # type: ignore[arg-type]
+            symbols=[],
         )
         with self.assertRaises(ValueError):
             validate_config(config, self.registry)

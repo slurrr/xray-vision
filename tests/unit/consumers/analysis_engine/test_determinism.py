@@ -1,4 +1,5 @@
 import unittest
+from collections.abc import Sequence
 
 from consumers.analysis_engine import (
     AnalysisEngine,
@@ -70,10 +71,20 @@ def _gate_event(run_id: str) -> StateGateEvent:
     )
 
 
+def _engine_config(*, enabled_modules: Sequence[str]) -> AnalysisEngineConfig:
+    return AnalysisEngineConfig(
+        enabled=True,
+        thresholds={"placeholder_threshold": 0.0},
+        enabled_modules=enabled_modules,
+        module_configs=[],
+        symbols=[],
+    )
+
+
 class TestDeterminism(unittest.TestCase):
     def test_replay_produces_identical_outputs(self) -> None:
         registry = ModuleRegistry([_Signal("signal.a")])
-        config = AnalysisEngineConfig(enabled_modules=["signal.a"], module_configs=[])
+        config = _engine_config(enabled_modules=["signal.a"])
         events = [_gate_event("run-1"), _gate_event("run-2")]
 
         engine_one = AnalysisEngine(registry=registry, config=config)

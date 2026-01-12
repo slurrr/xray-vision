@@ -48,6 +48,10 @@ def _select_opinion(opinions: Iterable[EvidenceOpinion]) -> EvidenceOpinion | No
     return ordered[0] if ordered else None
 
 
+def select_opinion(opinions: Iterable[EvidenceOpinion]) -> EvidenceOpinion | None:
+    return _select_opinion(opinions)
+
+
 def update_belief(state: RegimeState, evidence: EvidenceSnapshot) -> RegimeState:
     if state.symbol != evidence.symbol:
         raise ValueError("evidence symbol must match state symbol")

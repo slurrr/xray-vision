@@ -9,33 +9,33 @@ class RetryPolicy:
     min_delay_ms: int
     max_delay_ms: int
     max_attempts: int
-    max_elapsed_ms: int | None = None
+    max_elapsed_ms: int | None
 
 
 @dataclass(frozen=True)
 class BufferRetentionConfig:
     max_records: int
-    max_age_ms: int | None = None
+    max_age_ms: int | None
 
 
 @dataclass(frozen=True)
 class OutputPublishConfig:
     max_pending: int
-    max_block_ms: int | None = None
+    max_block_ms: int | None
 
 
 @dataclass(frozen=True)
 class SchedulerConfig:
     mode: str
-    timer_interval_ms: int | None = None
-    boundary_interval_ms: int | None = None
-    boundary_delay_ms: int | None = None
+    timer_interval_ms: int | None
+    boundary_interval_ms: int | None
+    boundary_delay_ms: int | None
 
 
 @dataclass(frozen=True)
 class EngineConfig:
     engine_mode: str
-    hysteresis_state_path: str | None = None
+    hysteresis_state_path: str | None
 
 
 @dataclass(frozen=True)

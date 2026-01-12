@@ -3,13 +3,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from .registry import ModuleRegistry
+from consumers.analysis_engine.registry import ModuleRegistry
 
 
 @dataclass(frozen=True)
 class ModuleConfig:
     module_id: str
-    config: Mapping[str, object] | None = None
+    config: Mapping[str, object] | None
 
 
 @dataclass(frozen=True)
@@ -20,15 +20,18 @@ class SymbolConfig:
 
 @dataclass(frozen=True)
 class AnalysisEngineConfig:
+    enabled: bool
+    thresholds: Mapping[str, float]
     enabled_modules: Sequence[str]
     module_configs: Sequence[ModuleConfig]
-    symbols: Sequence[SymbolConfig] | None = None
+    symbols: Sequence[SymbolConfig]
 
 
 def validate_config(config: AnalysisEngineConfig, registry: ModuleRegistry) -> None:
     _validate_enabled_modules(config.enabled_modules, registry)
     _validate_module_configs(config.module_configs, registry)
-    _validate_symbol_configs(config.symbols or [], registry)
+    _validate_symbol_configs(config.symbols, registry)
+    _validate_thresholds(config.thresholds)
 
 
 def _validate_enabled_modules(enabled_modules: Sequence[str], registry: ModuleRegistry) -> None:
@@ -62,3 +65,11 @@ def _validate_symbol_configs(
         for module_id in symbol_config.enabled_modules:
             if module_id not in registry.modules:
                 raise ValueError(f"unknown module_id in symbol config: {module_id}")
+
+
+def _validate_thresholds(thresholds: Mapping[str, float]) -> None:
+    for key, value in thresholds.items():
+        if not isinstance(key, str) or not key:
+            raise ValueError("threshold keys must be non-empty strings")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"threshold {key} must be a number")

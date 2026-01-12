@@ -19,8 +19,26 @@ def process_state(
 ) -> HysteresisState:
     active_config = config or HysteresisConfig()
     prev_state = store.state_for(regime_state.symbol)
+    effective_prev_state = prev_state
+    if (
+        prev_state is not None
+        and active_config.reset_max_gap_ms is not None
+        and regime_state.engine_timestamp_ms > prev_state.engine_timestamp_ms
+    ):
+        gap_ms = regime_state.engine_timestamp_ms - prev_state.engine_timestamp_ms
+        if gap_ms > active_config.reset_max_gap_ms:
+            effective_prev_state = None
+            get_observability().log_hysteresis_reset(
+                symbol=regime_state.symbol,
+                engine_timestamp_ms=regime_state.engine_timestamp_ms,
+                prev_engine_timestamp_ms=prev_state.engine_timestamp_ms,
+                gap_ms=gap_ms,
+                trigger="time_gap",
+            )
     anchor_for_candidate = (
-        prev_state.anchor_regime if prev_state is not None else regime_state.anchor_regime
+        effective_prev_state.anchor_regime
+        if effective_prev_state is not None
+        else regime_state.anchor_regime
     )
     candidate = select_candidate(
         regime_state.belief_by_regime,
@@ -32,14 +50,18 @@ def process_state(
         regime_state.belief_by_regime.get(candidate, 0.0) if candidate is not None else None
     )
     lead_over_anchor = b_candidate - b_anchor if b_candidate is not None else None
-    next_state = advance_hysteresis(prev_state, regime_state, active_config)
+    next_state = advance_hysteresis(effective_prev_state, regime_state, active_config)
     store.update(regime_state.symbol, next_state)
-    prev_anchor = prev_state.anchor_regime.value if prev_state is not None else None
+    prev_anchor = (
+        effective_prev_state.anchor_regime.value if effective_prev_state is not None else None
+    )
     committed = prev_anchor is not None and prev_anchor != next_state.anchor_regime.value
     get_observability().log_hysteresis_transition(
         symbol=next_state.symbol,
         engine_timestamp_ms=next_state.engine_timestamp_ms,
-        anchor_prev=prev_state.anchor_regime if prev_state is not None else None,
+        anchor_prev=(
+            effective_prev_state.anchor_regime if effective_prev_state is not None else None
+        ),
         anchor_next=next_state.anchor_regime,
         candidate_regime=next_state.candidate_regime,
         progress_current=next_state.progress_current,
@@ -52,7 +74,9 @@ def process_state(
     get_observability().log_hysteresis_decision(
         symbol=next_state.symbol,
         engine_timestamp_ms=next_state.engine_timestamp_ms,
-        prior_anchor_regime=prev_state.anchor_regime if prev_state is not None else None,
+        prior_anchor_regime=(
+            effective_prev_state.anchor_regime if effective_prev_state is not None else None
+        ),
         candidate_regime=candidate,
         selected_regime=next_state.anchor_regime,
         decision=decision,

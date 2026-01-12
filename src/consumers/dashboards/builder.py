@@ -156,7 +156,11 @@ class _SymbolState:
 
 class DashboardBuilder:
     def __init__(
-        self, *, time_fn: TimeFn | None = None, observability: Observability | None = None
+        self,
+        *,
+        time_fn: TimeFn | None = None,
+        observability: Observability | None = None,
+        default_time_window_ms: int = 0,
     ) -> None:
         self._symbols: dict[str, _SymbolState] = {}
         self._telemetry = _TelemetryState()
@@ -167,6 +171,7 @@ class DashboardBuilder:
             logger=NullLogger(), metrics=NullMetrics()
         )
         self._ingest_failure_codes: set[str] = set()
+        self._default_time_window_ms = default_time_window_ms
 
     def ingest_orchestrator_event(self, event: OrchestratorEvent) -> None:
         if not self._validate_or_record(
@@ -395,7 +400,7 @@ class DashboardBuilder:
     def build_snapshot(self, *, as_of_ts_ms: int | None = None) -> DashboardViewModel:
         start_time = self._time_fn()
         as_of = as_of_ts_ms if as_of_ts_ms is not None else self._time_fn()
-        telemetry = self._build_telemetry()
+        telemetry = self._build_telemetry(as_of_ts_ms=as_of)
         system = self._build_system_section(as_of_ts_ms=as_of, telemetry=telemetry)
         symbols = tuple(self._build_symbol_snapshot(state) for state in self._symbols.values())
         source_engine_timestamp_ms, source_run_id = (
@@ -413,6 +418,13 @@ class DashboardBuilder:
         )
         latency_ms = max(0, self._time_fn() - start_time)
         builder_lag_ms = _builder_lag(as_of_ts_ms=as_of, telemetry=telemetry)
+        if source_engine_timestamp_ms is None or source_run_id is None:
+            self._observability.log_snapshot(snapshot, latency_ms=latency_ms)
+            self._observability.record_snapshot_metrics(
+                latency_ms=latency_ms, builder_lag_ms=builder_lag_ms
+            )
+            return snapshot
+
         if source_engine_timestamp_ms is not None and source_run_id is not None:
             current_source = (source_engine_timestamp_ms, source_run_id)
             should_log = (
@@ -528,7 +540,7 @@ class DashboardBuilder:
             status=status, highlights=tuple(analysis_state.highlights), artifacts=artifacts
         )
 
-    def _build_telemetry(self) -> TelemetrySection:
+    def _build_telemetry(self, *, as_of_ts_ms: int) -> TelemetrySection:
         stale_reasons = []
         if self._telemetry.last_orchestrator_event_ts_ms is None:
             stale_reasons.append("missing_orchestrator_events")
@@ -549,6 +561,27 @@ class DashboardBuilder:
             last_state_gate_event_ts_ms=self._telemetry.last_state_gate_event_ts_ms,
             last_analysis_engine_event_ts_ms=self._telemetry.last_analysis_engine_event_ts_ms,
         )
+        if self._default_time_window_ms > 0:
+            latest_seen = max(
+                (
+                    ts
+                    for ts in (
+                        ingest.last_orchestrator_event_ts_ms,
+                        ingest.last_state_gate_event_ts_ms,
+                        ingest.last_analysis_engine_event_ts_ms,
+                    )
+                    if ts is not None
+                ),
+                default=None,
+            )
+            if latest_seen is not None:
+                lag_ms = max(0, as_of_ts_ms - latest_seen)
+                if lag_ms > self._default_time_window_ms:
+                    stale_reasons.append("stale_over_window")
+                    staleness = TelemetryStaleness(
+                        is_stale=bool(stale_reasons),
+                        stale_reasons=tuple(stale_reasons),
+                    )
         return TelemetrySection(ingest=ingest, staleness=staleness)
 
     def _build_system_section(

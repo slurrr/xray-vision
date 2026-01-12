@@ -23,6 +23,7 @@ from market_data.adapters.binance.config import (
     BinanceMarkPriceConfig,
     BinanceOpenInterestConfig,
 )
+from market_data.config import MarketDataConfig
 from market_data.observability import Observability, set_observability
 from market_data.pipeline import IngestionPipeline
 from market_data.runtime_config import AdapterType, MarketDataRuntimeConfig
@@ -69,10 +70,11 @@ def build_market_data_runtime(
     *,
     sink: RawEventSink,
     observability: Observability,
-    config: MarketDataRuntimeConfig | None = None,
+    config: MarketDataRuntimeConfig | MarketDataConfig | None = None,
 ) -> MarketDataRuntime:
     set_observability(observability)
-    runtime_config = config or MarketDataRuntimeConfig.default()
+    '''Runtime config is derived from domain config. Do not add new runtime defaults.'''
+    runtime_config = _resolve_runtime_config(config)
     pipeline = IngestionPipeline(
         sink=sink,
         backpressure=runtime_config.backpressure,
@@ -96,6 +98,29 @@ def build_market_data_runtime(
         optional_enabled=runtime_config.optional_enabled,
     )
     return MarketDataRuntime(adapters=adapters, threads=threads, info=info)
+
+
+def _resolve_runtime_config(
+    config: MarketDataRuntimeConfig | MarketDataConfig | None,
+) -> MarketDataRuntimeConfig:
+    if config is None:
+        return MarketDataRuntimeConfig.default()
+    if isinstance(config, MarketDataRuntimeConfig):
+        return config
+    return _derive_runtime_config(config)
+
+
+def _derive_runtime_config(config: MarketDataConfig) -> MarketDataRuntimeConfig:
+    defaults = config.defaults
+    enabled: set[AdapterType] = set()
+    for key, adapter_type in _ADAPTER_KEY_MAP.items():
+        if defaults.adapters.get(key):
+            enabled.add(adapter_type)
+    return MarketDataRuntimeConfig(
+        symbol=defaults.symbol,
+        enabled_adapters=frozenset(enabled),
+        backpressure=defaults.backpressure,
+    )
 
 
 def _build_binance_adapters(
@@ -207,4 +232,14 @@ _ADAPTER_FACTORIES: dict[
     AdapterType.DEPTH: _build_depth_adapter,
     AdapterType.MARK_PRICE: _build_mark_price_adapter,
     AdapterType.FORCE_ORDER: _build_force_order_adapter,
+}
+
+_ADAPTER_KEY_MAP: dict[str, AdapterType] = {
+    "agg_trade": AdapterType.AGG_TRADE,
+    "kline": AdapterType.KLINE,
+    "open_interest": AdapterType.OPEN_INTEREST,
+    "book_ticker": AdapterType.BOOK_TICKER,
+    "depth": AdapterType.DEPTH,
+    "mark_price": AdapterType.MARK_PRICE,
+    "force_order": AdapterType.FORCE_ORDER,
 }

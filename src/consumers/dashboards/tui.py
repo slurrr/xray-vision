@@ -21,13 +21,18 @@ class TuiRenderer(DashboardRenderer):
     """
 
     def __init__(
-        self, *, writer: TextIOBase | None = None, observability: Observability | None = None
+        self,
+        *,
+        writer: TextIOBase | None = None,
+        observability: Observability | None = None,
+        enabled_views: Iterable[str] | None = None,
     ) -> None:
         self._writer = writer or sys.stdout
         self._started = False
         self._observability = observability or Observability(
             logger=NullLogger(), metrics=NullMetrics()
         )
+        self._enabled_views = set(enabled_views) if enabled_views is not None else None
 
     def start(self) -> None:
         self._started = True
@@ -46,10 +51,13 @@ class TuiRenderer(DashboardRenderer):
 
         try:
             lines = list(_render_header(validated))
-            lines.extend(_render_system(validated))
-            lines.extend(_render_telemetry(validated))
-            for symbol in validated.symbols:
-                lines.extend(_render_symbol(symbol))
+            if self._view_enabled("system"):
+                lines.extend(_render_system(validated))
+            if self._view_enabled("telemetry"):
+                lines.extend(_render_telemetry(validated))
+            if self._view_enabled("symbols"):
+                for symbol in validated.symbols:
+                    lines.extend(_render_symbol(symbol))
             output = "\n".join(lines) + "\n"
             self._writer.write(output)
             if hasattr(self._writer, "flush"):
@@ -64,6 +72,11 @@ class TuiRenderer(DashboardRenderer):
             return
 
         self._observability.record_renderer_frame()
+
+    def _view_enabled(self, view: str) -> bool:
+        if self._enabled_views is None:
+            return True
+        return view in self._enabled_views
 
 
 def _render_header(snapshot: DashboardViewModel) -> Iterable[str]:

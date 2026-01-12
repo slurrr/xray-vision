@@ -1,0 +1,15 @@
+max_gap_ms: 180000
+denylisted_invalidations: []
+block_during_transition: false
+input_limits:
+  max_pending: 1000
+  max_block_ms: null
+  max_failures: null
+persistence_limits:
+  max_pending: 1000
+  max_block_ms: null
+  max_failures: null
+publish_limits:
+  max_pending: 1000
+  max_block_ms: null
+  max_failures: null

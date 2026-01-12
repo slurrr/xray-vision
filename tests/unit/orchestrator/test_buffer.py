@@ -48,6 +48,18 @@ class TestRawInputBuffer(unittest.TestCase):
         records = buffer.range_by_symbol(symbol="AAA", start_seq=1, end_seq=3)
         self.assertEqual([record.event.symbol for record in records], ["AAA", "AAA"])
 
+    def test_drop_through_removes_consumed_records(self) -> None:
+        buffer = RawInputBuffer(max_records=10)
+        buffer.append(self._event("AAA"), ingest_ts_ms=10)
+        buffer.append(self._event("BBB"), ingest_ts_ms=20)
+        buffer.append(self._event("AAA"), ingest_ts_ms=30)
+
+        dropped = buffer.drop_through(end_seq=2)
+
+        self.assertEqual(dropped, 2)
+        remaining = buffer.all_records()
+        self.assertEqual([record.ingest_seq for record in remaining], [3])
+
 
 if __name__ == "__main__":
     unittest.main()

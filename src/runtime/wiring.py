@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
+from typing import cast
 
 from composer.engine_evidence.compute import compute_engine_evidence_snapshot
 from composer.features.compute import compute_feature_snapshot
@@ -15,11 +16,12 @@ from consumers.analysis_engine.observability import Observability as AnalysisObs
 from consumers.analysis_engine.observability import StdlibLogger as AnalysisStdlibLogger
 from consumers.analysis_engine.registry import ModuleRegistry
 from consumers.dashboards import DashboardBuilder, TuiRenderer
+from consumers.dashboards.config import DashboardConfig
 from consumers.dashboards.observability import NullMetrics as DashNullMetrics
 from consumers.dashboards.observability import Observability as DashObservability
 from consumers.dashboards.observability import StdlibLogger as DashStdlibLogger
-from consumers.state_gate import StateGateConfig, StateGateProcessor
-from consumers.state_gate.config import OperationLimits
+from consumers.state_gate import StateGateProcessor
+from consumers.state_gate.config import StateGateConfig
 from consumers.state_gate.contracts import StateGateEvent
 from consumers.state_gate.observability import NullMetrics as GateNullMetrics
 from consumers.state_gate.observability import Observability as GateObservability
@@ -27,7 +29,7 @@ from consumers.state_gate.observability import StdlibLogger as GateStdlibLogger
 from market_data.contracts import RawMarketEvent
 from market_data.pipeline import emit_cadence_summary
 from orchestrator.buffer import RawInputBuffer
-from orchestrator.config import SchedulerConfig
+from orchestrator.config import OrchestratorConfig, SchedulerConfig
 from orchestrator.contracts import (
     ENGINE_MODE_HYSTERESIS,
     ENGINE_MODE_TRUTH,
@@ -79,8 +81,9 @@ class OrchestratorRuntime:
         hysteresis_config: HysteresisConfig | None = None,
         observability: OrchestratorObservability | None = None,
         scheduler_config: SchedulerConfig | None = None,
+        buffer_max_records: int = 50_000,
     ) -> None:
-        self._buffer = RawInputBuffer(max_records=50_000)
+        self._buffer = RawInputBuffer(max_records=buffer_max_records)
         self._cut_selector = CutSelector()
         self._engine_mode: EngineMode = engine_mode
         self._symbols: set[str] = set()
@@ -108,7 +111,12 @@ class OrchestratorRuntime:
         )
         self._scheduler = Scheduler(
             scheduler_config
-            or SchedulerConfig(mode="boundary", boundary_interval_ms=180_000, boundary_delay_ms=0)
+            or SchedulerConfig(
+                mode="boundary",
+                timer_interval_ms=None,
+                boundary_interval_ms=180_000,
+                boundary_delay_ms=0,
+            )
         )
         self._run_log = EngineRunLog()
         self._scheduler_running = False
@@ -283,6 +291,9 @@ class OrchestratorRuntime:
                 counts_by_event_type=counts_by_event_type,
             )
             self._publisher.publish(completed)
+        safe_drop_seq = self._cut_selector.min_consumed_ingest_seq()
+        if safe_drop_seq is not None:
+            self._buffer.drop_through(end_seq=safe_drop_seq)
 
     def _guard_hysteresis_monotonic(self, symbol: str, engine_timestamp_ms: int) -> bool:
         if self._engine_mode != ENGINE_MODE_HYSTERESIS:
@@ -299,9 +310,17 @@ class OrchestratorRuntime:
 
 
 class DashboardRuntime:
-    def __init__(self, *, builder: DashboardBuilder, renderer: TuiRenderer) -> None:
+    def __init__(
+        self,
+        *,
+        builder: DashboardBuilder,
+        renderer: TuiRenderer,
+        config: DashboardConfig,
+    ) -> None:
         self._builder = builder
         self._renderer = renderer
+        self._config = config
+        self._last_render_ms: int | None = None
 
     def start(self) -> None:
         self._renderer.start()
@@ -325,6 +344,13 @@ class DashboardRuntime:
         self._render()
 
     def _render(self) -> None:
+        refresh_cadence_ms = self._config.refresh_cadence_ms
+        if refresh_cadence_ms > 0:
+            now_ms = _now_ms()
+            if self._last_render_ms is not None:
+                if now_ms - self._last_render_ms < refresh_cadence_ms:
+                    return
+            self._last_render_ms = now_ms
         snapshot = self._builder.build_snapshot()
         self._renderer.render(snapshot)
 
@@ -337,23 +363,28 @@ class RuntimeWiring:
     dashboards: DashboardRuntime
 
 
-def build_runtime(bus: EventBus) -> RuntimeWiring:
+def build_runtime(
+    bus: EventBus,
+    *,
+    orchestrator_config: OrchestratorConfig,
+    state_gate_config: StateGateConfig,
+    analysis_engine_config: AnalysisEngineConfig,
+    dashboards_config: DashboardConfig,
+) -> RuntimeWiring:
     orchestrator = OrchestratorRuntime(
         bus=bus,
+        engine_mode=cast(EngineMode, orchestrator_config.engine.engine_mode),
+        hysteresis_state_path=orchestrator_config.engine.hysteresis_state_path,
+        hysteresis_config=HysteresisConfig(reset_max_gap_ms=720_000),
+        scheduler_config=orchestrator_config.scheduler,
+        buffer_max_records=orchestrator_config.buffer_retention.max_records,
         observability=OrchestratorObservability(
             logger=OrchestratorStdlibLogger(logging.getLogger("orchestrator")),
             metrics=OrchestratorNullMetrics(),
         ),
     )
     state_gate = StateGateProcessor(
-        config=StateGateConfig(
-            max_gap_ms=180_000,
-            denylisted_invalidations=(),
-            block_during_transition=False,
-            input_limits=OperationLimits(max_pending=1_000),
-            persistence_limits=OperationLimits(max_pending=1_000),
-            publish_limits=OperationLimits(max_pending=1_000),
-        ),
+        config=state_gate_config,
         observability=GateObservability(
             logger=GateStdlibLogger(logging.getLogger("consumers.state_gate")),
             metrics=GateNullMetrics(),
@@ -362,7 +393,7 @@ def build_runtime(bus: EventBus) -> RuntimeWiring:
     registry = ModuleRegistry(modules=())
     analysis_engine = AnalysisEngine(
         registry=registry,
-        config=AnalysisEngineConfig(enabled_modules=(), module_configs=()),
+        config=analysis_engine_config,
         observability=AnalysisObservability(
             logger=AnalysisStdlibLogger(logging.getLogger("consumers.analysis_engine")),
             metrics=AnalysisNullMetrics(),
@@ -373,8 +404,15 @@ def build_runtime(bus: EventBus) -> RuntimeWiring:
         metrics=DashNullMetrics(),
     )
     dashboards = DashboardRuntime(
-        builder=DashboardBuilder(observability=dashboards_observability),
-        renderer=TuiRenderer(observability=dashboards_observability),
+        builder=DashboardBuilder(
+            observability=dashboards_observability,
+            default_time_window_ms=dashboards_config.default_time_window_ms,
+        ),
+        renderer=TuiRenderer(
+            observability=dashboards_observability,
+            enabled_views=dashboards_config.enabled_views,
+        ),
+        config=dashboards_config,
     )
     return RuntimeWiring(
         orchestrator=orchestrator,

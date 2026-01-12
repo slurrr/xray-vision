@@ -1,0 +1,38 @@
+sources:
+  - source_id: binance
+    symbols:
+      - BTCUSDT
+scheduler:
+  mode: boundary
+  timer_interval_ms: null
+  boundary_interval_ms: 180000
+  boundary_delay_ms: 0
+engine:
+  engine_mode: hysteresis
+  hysteresis_state_path: logs/hysteresis/hysteresis_store.jsonl
+ingestion_retry:
+  min_delay_ms: 100
+  max_delay_ms: 1000
+  max_attempts: 3
+  max_elapsed_ms: null
+buffer_retry:
+  min_delay_ms: 100
+  max_delay_ms: 1000
+  max_attempts: 3
+  max_elapsed_ms: null
+engine_retry:
+  min_delay_ms: 100
+  max_delay_ms: 1000
+  max_attempts: 3
+  max_elapsed_ms: null
+publish_retry:
+  min_delay_ms: 100
+  max_delay_ms: 1000
+  max_attempts: 3
+  max_elapsed_ms: null
+buffer_retention:
+  max_records: 50000
+  max_age_ms: null
+output_publish:
+  max_pending: 1000
+  max_block_ms: null

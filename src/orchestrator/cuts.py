@@ -47,6 +47,11 @@ class CutSelector:
     def latest_ingest_seq(buffer: RawInputBuffer) -> int | None:
         return buffer.last_ingest_seq()
 
+    def min_consumed_ingest_seq(self) -> int | None:
+        if not self._last_end_by_symbol:
+            return None
+        return min(self._last_end_by_symbol.values())
+
     @staticmethod
     def _first_seq_for_symbol(
         buffer: RawInputBuffer, symbol: str, cut_end_ingest_seq: int

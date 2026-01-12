@@ -5,6 +5,9 @@ snapshot → score → veto → resolve → confidence → explain
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+
 from regime_engine.confidence import synthesize_confidence
 from regime_engine.confidence.types import ConfidenceResult
 from regime_engine.contracts.outputs import RegimeOutput
@@ -13,6 +16,11 @@ from regime_engine.contracts.snapshots import RegimeInputSnapshot
 from regime_engine.explainability import build_regime_output
 from regime_engine.explainability.permissions import permissions_for_regime
 from regime_engine.explainability.validate import validate_explainability
+from regime_engine.matrix.bridge import influences_to_evidence_snapshot
+from regime_engine.matrix.config import MatrixMode, load_matrix_routing_config
+from regime_engine.matrix.interpreter import ShadowMatrixInterpreter
+from regime_engine.matrix.types import RegimeInfluence, RegimeInfluenceSet
+from regime_engine.observability import get_observability
 from regime_engine.resolution import resolve_regime
 from regime_engine.resolution.types import ResolutionResult
 from regime_engine.scoring import score_all
@@ -26,7 +34,20 @@ from regime_engine.state.embedded_evidence import (
     EmbeddedEvidenceResult,
     extract_embedded_evidence,
 )
+from regime_engine.state.evidence import EvidenceOpinion, EvidenceSnapshot
 from regime_engine.state.state import RegimeState
+from regime_engine.state.update import select_opinion
+
+_MATRIX_INTERPRETER = ShadowMatrixInterpreter()
+_MATRIX_SHADOW_MAX_ITEMS = 25
+_MATRIX_ERROR_MAX_CHARS = 200
+
+
+@dataclass(frozen=True)
+class _MatrixError:
+    code: str
+    error_type: str
+    error_message: str
 
 
 def _clamp_unit(value: float) -> float:
@@ -87,11 +108,71 @@ def run_pipeline_with_state(
         )
     else:
         evidence = embedded.evidence
+    evidence_origin = "embedded" if embedded is not None else "classical"
+    config = load_matrix_routing_config()
+    scope_enabled = config.is_symbol_enabled(snapshot.symbol)
+    effective_mode = config.effective_mode(snapshot.symbol)
+    _log_matrix_mode_safely(
+        symbol=snapshot.symbol,
+        engine_timestamp_ms=snapshot.timestamp,
+        requested_mode=config.mode.value,
+        effective_mode=effective_mode.value,
+        scope_enabled=scope_enabled,
+        fail_closed=config.fail_closed,
+        strict_mismatch_fallback=config.strict_mismatch_fallback,
+    )
+    influence_set, matrix_error = _compute_matrix_influences(
+        evidence,
+        evidence_origin=evidence_origin,
+    )
+    matrix_evidence, bridge_error = _bridge_matrix_influences(
+        influence_set,
+        evidence_origin=evidence_origin,
+        interpreter_error=matrix_error,
+    )
+    legacy_selected = select_opinion(evidence.opinions)
+    matrix_selected = None
+    if matrix_evidence is not None:
+        matrix_selected = select_opinion(matrix_evidence.opinions)
+    selection_matches = None
+    if legacy_selected is not None and matrix_selected is not None:
+        selection_matches = _same_selection(legacy_selected, matrix_selected)
+    _log_matrix_diff_safely(
+        symbol=evidence.symbol,
+        engine_timestamp_ms=evidence.engine_timestamp_ms,
+        evidence_origin=evidence_origin,
+        legacy_selected=_summarize_selected(legacy_selected),
+        matrix_selected=_summarize_selected(matrix_selected),
+        selection_matches=selection_matches,
+        error_code=(bridge_error.code if bridge_error is not None else None),
+    )
+    evidence_for_belief = evidence
+    if effective_mode == MatrixMode.MATRIX_ENABLED:
+        fallback_error = bridge_error or matrix_error
+        fallback_reason = None
+        if matrix_evidence is None:
+            fallback_reason = (
+                fallback_error.code if fallback_error is not None else "matrix_missing"
+            )
+        elif config.strict_mismatch_fallback and selection_matches is False:
+            fallback_reason = "matrix_selection_mismatch"
+        if fallback_reason is None and matrix_evidence is not None:
+            evidence_for_belief = matrix_evidence
+        else:
+            if fallback_reason is None:
+                fallback_reason = "matrix_missing"
+            _log_matrix_fallback_safely(
+                symbol=evidence.symbol,
+                engine_timestamp_ms=evidence.engine_timestamp_ms,
+                evidence_origin=evidence_origin,
+                reason_code=fallback_reason,
+                error=fallback_error,
+            )
     prior_state = initialize_state(
         symbol=snapshot.symbol,
         engine_timestamp_ms=snapshot.timestamp,
     )
-    updated_state = update_belief(prior_state, evidence)
+    updated_state = update_belief(prior_state, evidence_for_belief)
     projected = None
     if resolution.winner is not None:
         projected = RegimeScore(
@@ -115,6 +196,286 @@ def run_pipeline_with_state(
             projected_regime=project_regime(updated_state),
         )
     return output, updated_state
+
+
+def _compute_matrix_influences(
+    evidence: EvidenceSnapshot,
+    *,
+    evidence_origin: str,
+) -> tuple[RegimeInfluenceSet | None, _MatrixError | None]:
+    try:
+        influence_set = _MATRIX_INTERPRETER.interpret(evidence)
+        _log_matrix_shadow_safely(
+            evidence=evidence,
+            evidence_origin=evidence_origin,
+            influence_set=influence_set,
+            interpreter_status="ok",
+            error_code=None,
+            error_type=None,
+            error_message=None,
+        )
+        return influence_set, None
+    except Exception as exc:
+        error = _MatrixError(
+            code="matrix_interpreter_exception",
+            error_type=type(exc).__name__,
+            error_message=_truncate_error_message(str(exc)),
+        )
+        _log_matrix_shadow_safely(
+            evidence=evidence,
+            evidence_origin=evidence_origin,
+            influence_set=None,
+            interpreter_status="error",
+            error_code=error.code,
+            error_type=error.error_type,
+            error_message=error.error_message,
+        )
+        return None, error
+
+
+def _bridge_matrix_influences(
+    influence_set: RegimeInfluenceSet | None,
+    *,
+    evidence_origin: str,
+    interpreter_error: _MatrixError | None,
+) -> tuple[EvidenceSnapshot | None, _MatrixError | None]:
+    if influence_set is None:
+        _log_matrix_bridge_safely(
+            evidence_origin=evidence_origin,
+            influence_set=None,
+            matrix_evidence=None,
+            status="error",
+            error=interpreter_error,
+        )
+        return None, interpreter_error
+    try:
+        matrix_evidence = influences_to_evidence_snapshot(influence_set)
+        _log_matrix_bridge_safely(
+            evidence_origin=evidence_origin,
+            influence_set=influence_set,
+            matrix_evidence=matrix_evidence,
+            status="ok",
+            error=None,
+        )
+        return matrix_evidence, None
+    except Exception as exc:
+        error = _MatrixError(
+            code="matrix_bridge_exception",
+            error_type=type(exc).__name__,
+            error_message=_truncate_error_message(str(exc)),
+        )
+        _log_matrix_bridge_safely(
+            evidence_origin=evidence_origin,
+            influence_set=influence_set,
+            matrix_evidence=None,
+            status="error",
+            error=error,
+        )
+        return None, error
+
+
+def _log_matrix_shadow_safely(
+    *,
+    evidence: EvidenceSnapshot,
+    evidence_origin: str,
+    influence_set: RegimeInfluenceSet | None,
+    interpreter_status: str,
+    error_code: str | None,
+    error_type: str | None,
+    error_message: str | None,
+) -> None:
+    try:
+        opinions = evidence.opinions
+        influences: Sequence[RegimeInfluence] = ()
+        if influence_set is not None:
+            influences = influence_set.influences
+        get_observability().log_matrix_shadow(
+            symbol=evidence.symbol,
+            engine_timestamp_ms=evidence.engine_timestamp_ms,
+            evidence_origin=evidence_origin,
+            opinion_count=len(opinions),
+            opinion_summaries=_summarize_opinions(opinions),
+            influence_count=len(influences),
+            influence_summaries=_summarize_influences(influences),
+            interpreter_status=interpreter_status,
+            error_code=error_code,
+            error_type=error_type,
+            error_message=error_message,
+        )
+    except Exception:
+        return None
+
+
+def _log_matrix_mode_safely(
+    *,
+    symbol: str,
+    engine_timestamp_ms: int,
+    requested_mode: str,
+    effective_mode: str,
+    scope_enabled: bool,
+    fail_closed: bool,
+    strict_mismatch_fallback: bool,
+) -> None:
+    try:
+        get_observability().log_matrix_mode(
+            symbol=symbol,
+            engine_timestamp_ms=engine_timestamp_ms,
+            requested_mode=requested_mode,
+            effective_mode=effective_mode,
+            scope_enabled=scope_enabled,
+            fail_closed=fail_closed,
+            strict_mismatch_fallback=strict_mismatch_fallback,
+        )
+    except Exception:
+        return None
+
+
+def _log_matrix_bridge_safely(
+    *,
+    evidence_origin: str,
+    influence_set: RegimeInfluenceSet | None,
+    matrix_evidence: EvidenceSnapshot | None,
+    status: str,
+    error: _MatrixError | None,
+) -> None:
+    try:
+        influence_summaries: Sequence[dict[str, object]] = ()
+        influence_count = 0
+        if influence_set is not None:
+            influence_summaries = _summarize_influences(influence_set.influences)
+            influence_count = len(influence_set.influences)
+        opinion_summaries: Sequence[dict[str, object]] = ()
+        opinion_count = 0
+        symbol = None
+        engine_timestamp_ms = None
+        if matrix_evidence is not None:
+            opinion_summaries = _summarize_opinions(matrix_evidence.opinions)
+            opinion_count = len(matrix_evidence.opinions)
+            symbol = matrix_evidence.symbol
+            engine_timestamp_ms = matrix_evidence.engine_timestamp_ms
+        elif influence_set is not None:
+            symbol = influence_set.symbol
+            engine_timestamp_ms = influence_set.engine_timestamp_ms
+        if symbol is None or engine_timestamp_ms is None:
+            return None
+        get_observability().log_matrix_bridge(
+            symbol=symbol,
+            engine_timestamp_ms=engine_timestamp_ms,
+            evidence_origin=evidence_origin,
+            influence_count=influence_count,
+            influence_summaries=influence_summaries,
+            opinion_count=opinion_count,
+            opinion_summaries=opinion_summaries,
+            status=status,
+            error_code=(error.code if error is not None else None),
+            error_type=(error.error_type if error is not None else None),
+            error_message=(error.error_message if error is not None else None),
+        )
+    except Exception:
+        return None
+
+
+def _log_matrix_diff_safely(
+    *,
+    symbol: str,
+    engine_timestamp_ms: int,
+    evidence_origin: str,
+    legacy_selected: Mapping[str, object] | None,
+    matrix_selected: Mapping[str, object] | None,
+    selection_matches: bool | None,
+    error_code: str | None,
+) -> None:
+    try:
+        get_observability().log_matrix_diff(
+            symbol=symbol,
+            engine_timestamp_ms=engine_timestamp_ms,
+            evidence_origin=evidence_origin,
+            legacy_selected=legacy_selected,
+            matrix_selected=matrix_selected,
+            selection_matches=selection_matches,
+            error_code=error_code,
+        )
+    except Exception:
+        return None
+
+
+def _log_matrix_fallback_safely(
+    *,
+    symbol: str,
+    engine_timestamp_ms: int,
+    evidence_origin: str,
+    reason_code: str,
+    error: _MatrixError | None,
+) -> None:
+    try:
+        get_observability().log_matrix_fallback(
+            symbol=symbol,
+            engine_timestamp_ms=engine_timestamp_ms,
+            evidence_origin=evidence_origin,
+            reason_code=reason_code,
+            error_type=(error.error_type if error is not None else None),
+            error_message=(error.error_message if error is not None else None),
+        )
+    except Exception:
+        return None
+
+
+def _summarize_selected(
+    opinion: EvidenceOpinion | None,
+) -> dict[str, object] | None:
+    if opinion is None:
+        return None
+    return {
+        "source": opinion.source,
+        "regime": opinion.regime.value,
+        "strength": opinion.strength,
+        "confidence": opinion.confidence,
+    }
+
+
+def _same_selection(left: EvidenceOpinion, right: EvidenceOpinion) -> bool:
+    return (
+        left.regime == right.regime
+        and left.strength == right.strength
+        and left.confidence == right.confidence
+        and left.source == right.source
+    )
+
+
+def _truncate_error_message(message: str) -> str:
+    if len(message) <= _MATRIX_ERROR_MAX_CHARS:
+        return message
+    return message[:_MATRIX_ERROR_MAX_CHARS]
+
+
+def _summarize_opinions(opinions: Sequence[EvidenceOpinion]) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    for opinion in opinions[:_MATRIX_SHADOW_MAX_ITEMS]:
+        summaries.append(
+            {
+                "source": opinion.source,
+                "regime": opinion.regime.value,
+                "strength": opinion.strength,
+                "confidence": opinion.confidence,
+            }
+        )
+    return summaries
+
+
+def _summarize_influences(
+    influences: Sequence[RegimeInfluence],
+) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    for influence in influences[:_MATRIX_SHADOW_MAX_ITEMS]:
+        summaries.append(
+            {
+                "source": influence.source,
+                "regime": influence.regime.value,
+                "strength": influence.strength,
+                "confidence": influence.confidence,
+            }
+        )
+    return summaries
 
 
 def run_pipeline(snapshot: RegimeInputSnapshot) -> RegimeOutput:

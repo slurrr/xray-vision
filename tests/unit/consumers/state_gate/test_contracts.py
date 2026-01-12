@@ -131,9 +131,15 @@ class TestStateGateContracts(unittest.TestCase):
                     max_gap_ms=0,
                     denylisted_invalidations=[],
                     block_during_transition=False,
-                    input_limits=OperationLimits(max_pending=0),
-                    persistence_limits=OperationLimits(max_pending=1),
-                    publish_limits=OperationLimits(max_pending=1),
+                    input_limits=OperationLimits(
+                        max_pending=0, max_block_ms=None, max_failures=None
+                    ),
+                    persistence_limits=OperationLimits(
+                        max_pending=1, max_block_ms=None, max_failures=None
+                    ),
+                    publish_limits=OperationLimits(
+                        max_pending=1, max_block_ms=None, max_failures=None
+                    ),
                 )
             )
         with self.assertRaises(ValueError):
@@ -142,9 +148,15 @@ class TestStateGateContracts(unittest.TestCase):
                     max_gap_ms=1,
                     denylisted_invalidations=[],
                     block_during_transition=False,
-                    input_limits=OperationLimits(max_pending=1, max_block_ms=0),
-                    persistence_limits=OperationLimits(max_pending=1),
-                    publish_limits=OperationLimits(max_pending=1),
+                    input_limits=OperationLimits(
+                        max_pending=1, max_block_ms=0, max_failures=None
+                    ),
+                    persistence_limits=OperationLimits(
+                        max_pending=1, max_block_ms=None, max_failures=None
+                    ),
+                    publish_limits=OperationLimits(
+                        max_pending=1, max_block_ms=None, max_failures=None
+                    ),
                 )
             )
         with self.assertRaises(ValueError):
@@ -153,9 +165,15 @@ class TestStateGateContracts(unittest.TestCase):
                     max_gap_ms=1,
                     denylisted_invalidations=[],
                     block_during_transition=False,
-                    input_limits=OperationLimits(max_pending=1, max_failures=0),
-                    persistence_limits=OperationLimits(max_pending=1),
-                    publish_limits=OperationLimits(max_pending=1),
+                    input_limits=OperationLimits(
+                        max_pending=1, max_block_ms=None, max_failures=0
+                    ),
+                    persistence_limits=OperationLimits(
+                        max_pending=1, max_block_ms=None, max_failures=None
+                    ),
+                    publish_limits=OperationLimits(
+                        max_pending=1, max_block_ms=None, max_failures=None
+                    ),
                 )
             )
 

@@ -17,6 +17,7 @@ class HysteresisConfig:
     min_lead_over_anchor: float | None = None
     decay_step: int = 1
     allowed_regimes: Sequence[Regime] | None = None
+    reset_max_gap_ms: int | None = None
 
 
 @dataclass(frozen=True)

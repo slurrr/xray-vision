@@ -95,14 +95,27 @@ class TestOrchestratorContracts(unittest.TestCase):
     def test_config_validation_accepts_minimal_config(self) -> None:
         config = OrchestratorConfig(
             sources=[SourceConfig(source_id="source", symbols=["TEST"])],
-            scheduler=SchedulerConfig(mode="timer", timer_interval_ms=1000),
-            engine=EngineConfig(engine_mode="truth"),
-            ingestion_retry=RetryPolicy(min_delay_ms=1, max_delay_ms=2, max_attempts=1),
-            buffer_retry=RetryPolicy(min_delay_ms=1, max_delay_ms=2, max_attempts=1),
-            engine_retry=RetryPolicy(min_delay_ms=1, max_delay_ms=2, max_attempts=1),
-            publish_retry=RetryPolicy(min_delay_ms=1, max_delay_ms=2, max_attempts=1),
-            buffer_retention=BufferRetentionConfig(max_records=10),
-            output_publish=OutputPublishConfig(max_pending=10),
+            scheduler=SchedulerConfig(
+                mode="timer",
+                timer_interval_ms=1000,
+                boundary_interval_ms=None,
+                boundary_delay_ms=None,
+            ),
+            engine=EngineConfig(engine_mode="truth", hysteresis_state_path=None),
+            ingestion_retry=RetryPolicy(
+                min_delay_ms=1, max_delay_ms=2, max_attempts=1, max_elapsed_ms=None
+            ),
+            buffer_retry=RetryPolicy(
+                min_delay_ms=1, max_delay_ms=2, max_attempts=1, max_elapsed_ms=None
+            ),
+            engine_retry=RetryPolicy(
+                min_delay_ms=1, max_delay_ms=2, max_attempts=1, max_elapsed_ms=None
+            ),
+            publish_retry=RetryPolicy(
+                min_delay_ms=1, max_delay_ms=2, max_attempts=1, max_elapsed_ms=None
+            ),
+            buffer_retention=BufferRetentionConfig(max_records=10, max_age_ms=None),
+            output_publish=OutputPublishConfig(max_pending=10, max_block_ms=None),
         )
         validate_config(config)
 

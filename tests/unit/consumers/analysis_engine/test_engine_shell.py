@@ -1,4 +1,5 @@
 import unittest
+from collections.abc import Sequence
 
 from consumers.analysis_engine import (
     AnalysisEngine,
@@ -40,11 +41,21 @@ def _gate_event(
     )
 
 
+def _engine_config(*, enabled_modules: Sequence[str]) -> AnalysisEngineConfig:
+    return AnalysisEngineConfig(
+        enabled=True,
+        thresholds={"placeholder_threshold": 0.0},
+        enabled_modules=enabled_modules,
+        module_configs=[],
+        symbols=[],
+    )
+
+
 class TestEngineShell(unittest.TestCase):
     def test_open_gate_emits_started_and_completed(self) -> None:
         engine = AnalysisEngine(
             registry=ModuleRegistry([]),
-            config=AnalysisEngineConfig(enabled_modules=[], module_configs=[]),
+            config=_engine_config(enabled_modules=[]),
         )
         outputs = engine.consume(_gate_event())
         event_types = [event.event_type for event in outputs]
@@ -57,7 +68,7 @@ class TestEngineShell(unittest.TestCase):
     def test_closed_gate_emits_skipped(self) -> None:
         engine = AnalysisEngine(
             registry=ModuleRegistry([]),
-            config=AnalysisEngineConfig(enabled_modules=[], module_configs=[]),
+            config=_engine_config(enabled_modules=[]),
         )
         outputs = engine.consume(_gate_event(gate_status=GATE_STATUS_CLOSED))
         self.assertEqual([event.event_type for event in outputs], ["AnalysisRunSkipped"])
@@ -65,7 +76,7 @@ class TestEngineShell(unittest.TestCase):
     def test_duplicate_run_id_is_idempotent(self) -> None:
         engine = AnalysisEngine(
             registry=ModuleRegistry([]),
-            config=AnalysisEngineConfig(enabled_modules=[], module_configs=[]),
+            config=_engine_config(enabled_modules=[]),
             idempotency_store=IdempotencyStore(),
         )
         open_event = _gate_event(run_id="run-dup")
@@ -77,7 +88,7 @@ class TestEngineShell(unittest.TestCase):
     def test_halted_symbol_prevents_processing(self) -> None:
         engine = AnalysisEngine(
             registry=ModuleRegistry([]),
-            config=AnalysisEngineConfig(enabled_modules=[], module_configs=[]),
+            config=_engine_config(enabled_modules=[]),
         )
         halt_event = _gate_event(event_type=EVENT_TYPE_STATE_GATE_HALTED, run_id="run-halt")
         halt_outputs = engine.consume(halt_event)

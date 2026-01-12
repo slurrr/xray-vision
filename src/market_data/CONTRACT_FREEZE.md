@@ -39,6 +39,11 @@ Normalized (required):
 ## Minimal config (single source, single symbol)
 
 MarketDataConfig
+- defaults: MarketDataDefaults
+  - symbol
+  - adapters
+  - backpressure
+  - limits (optional)
 - sources: list of SourceConfig entries
 
 SourceConfig (minimal fields)

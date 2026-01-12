@@ -1,5 +1,5 @@
 import unittest
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from consumers.analysis_engine import (
     AnalysisEngine,
@@ -100,6 +100,16 @@ def _gate_event(run_id: str = "run-1") -> StateGateEvent:
     )
 
 
+def _engine_config(*, enabled_modules: Sequence[str]) -> AnalysisEngineConfig:
+    return AnalysisEngineConfig(
+        enabled=True,
+        thresholds={"placeholder_threshold": 0.0},
+        enabled_modules=enabled_modules,
+        module_configs=[],
+        symbols=[],
+    )
+
+
 class TestObservability(unittest.TestCase):
     def test_logs_and_metrics_recorded(self) -> None:
         logger = FakeLogger()
@@ -108,7 +118,7 @@ class TestObservability(unittest.TestCase):
         registry = ModuleRegistry([_Signal("signal.a")])
         engine = AnalysisEngine(
             registry=registry,
-            config=AnalysisEngineConfig(enabled_modules=["signal.a"], module_configs=[]),
+            config=_engine_config(enabled_modules=["signal.a"]),
             observability=obs,
         )
         engine.consume(_gate_event())
@@ -129,7 +139,7 @@ class TestObservability(unittest.TestCase):
         registry = ModuleRegistry([_Signal("signal.a")])
         engine = AnalysisEngine(
             registry=registry,
-            config=AnalysisEngineConfig(enabled_modules=["signal.a"], module_configs=[]),
+            config=_engine_config(enabled_modules=["signal.a"]),
             observability=obs,
         )
         event = _gate_event(run_id="dup")
@@ -147,7 +157,7 @@ class TestObservability(unittest.TestCase):
         registry = ModuleRegistry([])
         engine = AnalysisEngine(
             registry=registry,
-            config=AnalysisEngineConfig(enabled_modules=[], module_configs=[]),
+            config=_engine_config(enabled_modules=[]),
             observability=obs,
         )
         health = engine.health_status()

@@ -7,7 +7,14 @@ from orchestrator.sequencing import SymbolSequencer
 
 class TestScheduler(unittest.TestCase):
     def test_timer_scheduler_is_deterministic(self) -> None:
-        scheduler = Scheduler(SchedulerConfig(mode="timer", timer_interval_ms=1000))
+        scheduler = Scheduler(
+            SchedulerConfig(
+                mode="timer",
+                timer_interval_ms=1000,
+                boundary_interval_ms=None,
+                boundary_delay_ms=None,
+            )
+        )
         first = scheduler.next_tick_ms(now_ms=100)
         second = scheduler.next_tick_ms(now_ms=200)
         third = scheduler.next_tick_ms(now_ms=300)
@@ -18,7 +25,12 @@ class TestScheduler(unittest.TestCase):
 
     def test_boundary_scheduler_aligns_to_interval(self) -> None:
         scheduler = Scheduler(
-            SchedulerConfig(mode="boundary", boundary_interval_ms=3000, boundary_delay_ms=500)
+            SchedulerConfig(
+                mode="boundary",
+                timer_interval_ms=None,
+                boundary_interval_ms=3000,
+                boundary_delay_ms=500,
+            )
         )
         first = scheduler.next_tick_ms(now_ms=1000)
         second = scheduler.next_tick_ms(now_ms=2000)

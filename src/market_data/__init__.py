@@ -9,6 +9,7 @@ from market_data.adapter import (
 from market_data.config import (
     BackpressureConfig,
     MarketDataConfig,
+    MarketDataDefaults,
     OperationalLimits,
     RetryPolicy,
     SourceConfig,
@@ -35,6 +36,7 @@ __all__ = [
     "AdapterSupervisor",
     "StreamKey",
     "MarketDataConfig",
+    "MarketDataDefaults",
     "OperationalLimits",
     "RetryPolicy",
     "SourceConfig",

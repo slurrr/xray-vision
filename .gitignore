@@ -15,3 +15,6 @@ build/
 *.jsonl
 
 *.log
+
+tools/evidence_matrix_replay/captures/
+tools/evidence_matrix_replay/replays/

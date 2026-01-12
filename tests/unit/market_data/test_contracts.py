@@ -4,6 +4,7 @@ from dataclasses import FrozenInstanceError
 from market_data.config import (
     BackpressureConfig,
     MarketDataConfig,
+    MarketDataDefaults,
     OperationalLimits,
     RetryPolicy,
     SourceConfig,
@@ -39,10 +40,16 @@ class TestMarketDataContracts(unittest.TestCase):
 
     def test_config_validation_rejects_empty_sources(self) -> None:
         with self.assertRaises(ValueError):
-            validate_config(MarketDataConfig(sources=[]))
+            validate_config(
+                MarketDataConfig(
+                    defaults=_defaults(),
+                    sources=[],
+                )
+            )
 
     def test_config_validation_accepts_minimal_source(self) -> None:
         config = MarketDataConfig(
+            defaults=_defaults(),
             sources=[
                 SourceConfig(
                     source_id="test-source",
@@ -58,6 +65,23 @@ class TestMarketDataContracts(unittest.TestCase):
             ]
         )
         validate_config(config)
+
+
+def _defaults() -> MarketDataDefaults:
+    return MarketDataDefaults(
+        symbol="TEST",
+        adapters={
+            "agg_trade": True,
+            "kline": True,
+            "open_interest": True,
+            "book_ticker": False,
+            "depth": False,
+            "mark_price": False,
+            "force_order": False,
+        },
+        backpressure=BackpressureConfig(policy="block", max_pending=1),
+        limits=None,
+    )
 
 
 if __name__ == "__main__":
