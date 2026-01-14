@@ -1,0 +1,7 @@
+mode: matrix_enabled
+interpreter: v1
+symbol_allowlist:
+  - BTCUSDT
+rollout_percent: 0
+fail_closed: true
+strict_mismatch_fallback: false

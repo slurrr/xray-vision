@@ -4,8 +4,10 @@ from collections.abc import Iterable, Mapping
 from dataclasses import fields
 from typing import Any
 
+from composer.contracts.evidence_snapshot import EvidenceSnapshot as NeutralEvidenceSnapshot
 from composer.contracts.feature_snapshot import FeatureSnapshot, feature_value
 from composer.engine_evidence.embedding import embed_engine_evidence
+from composer.evidence.embedding import embed_neutral_evidence
 from market_data.contracts import RawMarketEvent
 from regime_engine.contracts.snapshots import (
     MISSING,
@@ -15,7 +17,7 @@ from regime_engine.contracts.snapshots import (
     MarketSnapshot,
     RegimeInputSnapshot,
 )
-from regime_engine.state.evidence import EvidenceSnapshot
+from regime_engine.state.evidence import EvidenceSnapshot as EngineEvidenceSnapshot
 
 
 def build_legacy_snapshot(
@@ -24,7 +26,8 @@ def build_legacy_snapshot(
     symbol: str,
     engine_timestamp_ms: int,
     feature_snapshot: FeatureSnapshot,
-    evidence_snapshot: EvidenceSnapshot,
+    evidence_snapshot: EngineEvidenceSnapshot,
+    neutral_evidence_snapshot: NeutralEvidenceSnapshot,
 ) -> RegimeInputSnapshot:
     events = tuple(raw_events)
     snapshot_event = _select_snapshot_event(
@@ -44,7 +47,8 @@ def build_legacy_snapshot(
             symbol=symbol,
             engine_timestamp_ms=engine_timestamp_ms,
         )
-    return embed_engine_evidence(legacy_snapshot, evidence_snapshot)
+    with_engine_evidence = embed_engine_evidence(legacy_snapshot, evidence_snapshot)
+    return embed_neutral_evidence(with_engine_evidence, neutral_evidence_snapshot)
 
 
 def _select_snapshot_event(

@@ -1,5 +1,15 @@
 import unittest
 
+from composer.contracts.evidence_opinion import EvidenceOpinion as NeutralEvidenceOpinion
+from composer.contracts.evidence_snapshot import (
+    SCHEMA_NAME as NEUTRAL_SCHEMA_NAME,
+)
+from composer.contracts.evidence_snapshot import (
+    SCHEMA_VERSION as NEUTRAL_SCHEMA_VERSION,
+)
+from composer.contracts.evidence_snapshot import (
+    EvidenceSnapshot as NeutralEvidenceSnapshot,
+)
 from composer.contracts.feature_snapshot import (
     FEATURE_KEY_ALIASES,
     FEATURE_KEYS_V1,
@@ -8,9 +18,15 @@ from composer.contracts.feature_snapshot import (
     FeatureSnapshot,
 )
 from composer.legacy_snapshot.builder import build_legacy_snapshot
-from market_data.contracts import SCHEMA_NAME as RAW_SCHEMA_NAME
-from market_data.contracts import SCHEMA_VERSION as RAW_SCHEMA_VERSION
-from market_data.contracts import RawMarketEvent
+from market_data.contracts import (
+    SCHEMA_NAME as RAW_SCHEMA_NAME,
+)
+from market_data.contracts import (
+    SCHEMA_VERSION as RAW_SCHEMA_VERSION,
+)
+from market_data.contracts import (
+    RawMarketEvent,
+)
 from regime_engine.contracts.regimes import Regime
 from regime_engine.contracts.snapshots import MISSING, RegimeInputSnapshot
 from regime_engine.state.evidence import EvidenceOpinion, EvidenceSnapshot
@@ -44,6 +60,16 @@ def _raw_event(*, event_type: str, normalized: dict[str, object]) -> RawMarketEv
     )
 
 
+def _neutral_evidence(opinions: tuple[NeutralEvidenceOpinion, ...]) -> NeutralEvidenceSnapshot:
+    return NeutralEvidenceSnapshot(
+        schema=NEUTRAL_SCHEMA_NAME,
+        schema_version=NEUTRAL_SCHEMA_VERSION,
+        symbol="TEST",
+        engine_timestamp_ms=180_000,
+        opinions=opinions,
+    )
+
+
 class TestLegacySnapshotBuilder(unittest.TestCase):
     def test_snapshot_inputs_pass_through(self) -> None:
         snapshot_event = _raw_event(
@@ -69,12 +95,24 @@ class TestLegacySnapshotBuilder(unittest.TestCase):
                 ),
             ),
         )
+        neutral_evidence = _neutral_evidence(
+            (
+                NeutralEvidenceOpinion(
+                    type="momentum",
+                    direction="UP",
+                    strength=0.4,
+                    confidence=0.6,
+                    source="composer:test",
+                ),
+            )
+        )
         legacy = build_legacy_snapshot(
             (snapshot_event,),
             symbol="TEST",
             engine_timestamp_ms=180_000,
             feature_snapshot=feature_snapshot,
             evidence_snapshot=evidence,
+            neutral_evidence_snapshot=neutral_evidence,
         )
         self.assertIsInstance(legacy, RegimeInputSnapshot)
         self.assertEqual(legacy.market.price, 2.0)
@@ -82,6 +120,9 @@ class TestLegacySnapshotBuilder(unittest.TestCase):
         self.assertEqual(legacy.flow.cvd, 3.0)
         self.assertEqual(legacy.context.rs_vs_btc, 1.0)
         self.assertIn("composer_evidence_snapshot_v1", legacy.market.structure_levels)
+        self.assertIn(
+            "composer_evidence_snapshot_neutral_v1", legacy.market.structure_levels
+        )
 
     def test_fallback_from_features(self) -> None:
         feature_snapshot = _feature_snapshot(
@@ -99,12 +140,14 @@ class TestLegacySnapshotBuilder(unittest.TestCase):
             engine_timestamp_ms=180_000,
             opinions=(),
         )
+        neutral_evidence = _neutral_evidence(())
         legacy = build_legacy_snapshot(
             (),
             symbol="TEST",
             engine_timestamp_ms=180_000,
             feature_snapshot=feature_snapshot,
             evidence_snapshot=evidence,
+            neutral_evidence_snapshot=neutral_evidence,
         )
         self.assertEqual(legacy.market.price, 1.2)
         self.assertEqual(legacy.market.vwap, 1.0)
@@ -115,6 +158,9 @@ class TestLegacySnapshotBuilder(unittest.TestCase):
         self.assertEqual(legacy.market.range_expansion, MISSING)
         self.assertEqual(legacy.flow.cvd_slope, MISSING)
         self.assertNotIn("composer_evidence_snapshot_v1", legacy.market.structure_levels)
+        self.assertIn(
+            "composer_evidence_snapshot_neutral_v1", legacy.market.structure_levels
+        )
 
     def test_empty_features_keep_embedding_when_classical_present(self) -> None:
         feature_snapshot = _feature_snapshot({})
@@ -130,12 +176,14 @@ class TestLegacySnapshotBuilder(unittest.TestCase):
                 ),
             ),
         )
+        neutral_evidence = _neutral_evidence(())
         legacy = build_legacy_snapshot(
             (),
             symbol="TEST",
             engine_timestamp_ms=180_000,
             feature_snapshot=feature_snapshot,
             evidence_snapshot=evidence,
+            neutral_evidence_snapshot=neutral_evidence,
         )
         self.assertIn("composer_evidence_snapshot_v1", legacy.market.structure_levels)
 
@@ -155,12 +203,14 @@ class TestLegacySnapshotBuilder(unittest.TestCase):
             engine_timestamp_ms=180_000,
             opinions=(),
         )
+        neutral_evidence = _neutral_evidence(())
         legacy = build_legacy_snapshot(
             (),
             symbol="TEST",
             engine_timestamp_ms=180_000,
             feature_snapshot=feature_snapshot,
             evidence_snapshot=evidence,
+            neutral_evidence_snapshot=neutral_evidence,
         )
         self.assertEqual(legacy.market.price, 1.1)
         self.assertEqual(legacy.market.vwap, 1.0)

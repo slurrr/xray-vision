@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import cast
 
 from composer.engine_evidence.compute import compute_engine_evidence_snapshot
+from composer.evidence.compute import compute_evidence_snapshot
 from composer.features.compute import compute_feature_snapshot
 from composer.legacy_snapshot import build_legacy_snapshot
 from consumers.analysis_engine import AnalysisEngine, AnalysisEngineConfig
@@ -218,12 +219,14 @@ class OrchestratorRuntime:
                     engine_timestamp_ms=engine_timestamp_ms,
                 )
                 evidence_snapshot = compute_engine_evidence_snapshot(feature_snapshot)
+                neutral_evidence_snapshot = compute_evidence_snapshot(feature_snapshot)
                 snapshot = build_legacy_snapshot(
                     raw_events,
                     symbol=symbol,
                     engine_timestamp_ms=engine_timestamp_ms,
                     feature_snapshot=feature_snapshot,
                     evidence_snapshot=evidence_snapshot,
+                    neutral_evidence_snapshot=neutral_evidence_snapshot,
                 )
             except Exception as exc:
                 failed = build_engine_run_failed(

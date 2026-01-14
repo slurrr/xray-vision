@@ -7,7 +7,7 @@ re-run the system deterministically, and diff outputs across code changes.
 
 ## 1) Capture (Create a Baseline)
 
-Freeze a live run into deterministic, replayable artifacts. **Add folder when invoking captures**
+Freeze a live run into deterministic, replayable artifacts. **Add directory when invoking captures**
 
 ```bash
 .venv/bin/python tools/evidence_matrix_replay/capture.py \
@@ -56,7 +56,7 @@ Notes:
 
 ---
 
-## 3) Diff (Compare Outputs)
+## 3) Diff (Compare Outputs) **Add directory when invoking diffs**
 
 Compare two replay output directories.
 

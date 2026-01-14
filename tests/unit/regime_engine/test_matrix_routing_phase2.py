@@ -36,6 +36,21 @@ def _make_snapshot() -> RegimeInputSnapshot:
             }
         ],
     }
+    neutral_payload = {
+        "schema": "evidence_snapshot",
+        "schema_version": "1",
+        "symbol": "TEST",
+        "engine_timestamp_ms": 180_000,
+        "opinions": [
+            {
+                "type": "REGIME_OPINION",
+                "direction": "NEUTRAL",
+                "strength": 0.0,
+                "confidence": 0.9,
+                "source": "composer.classical",
+            }
+        ],
+    }
     return RegimeInputSnapshot(
         symbol="TEST",
         timestamp=180_000,
@@ -45,7 +60,10 @@ def _make_snapshot() -> RegimeInputSnapshot:
             atr=1.0,
             atr_z=0.0,
             range_expansion=0.0,
-            structure_levels={EMBEDDED_EVIDENCE_KEY: payload},
+            structure_levels={
+                EMBEDDED_EVIDENCE_KEY: payload,
+                "composer_evidence_snapshot_neutral_v1": neutral_payload,
+            },
             acceptance_score=0.0,
             sweep_score=0.0,
         ),
@@ -119,6 +137,7 @@ class TestMatrixRoutingPhase2(unittest.TestCase):
                 {
                     "REGIME_ENGINE_MATRIX_MODE": "dual_run",
                     "REGIME_ENGINE_MATRIX_SYMBOL_ALLOWLIST": "TEST",
+                    "REGIME_ENGINE_MATRIX_INTERPRETER": "shadow",
                 },
                 clear=False,
             ):
@@ -147,6 +166,7 @@ class TestMatrixRoutingPhase2(unittest.TestCase):
                 {
                     "REGIME_ENGINE_MATRIX_MODE": "matrix_enabled",
                     "REGIME_ENGINE_MATRIX_SYMBOL_ALLOWLIST": "TEST",
+                    "REGIME_ENGINE_MATRIX_INTERPRETER": "shadow",
                 },
                 clear=False,
             ):
@@ -175,6 +195,7 @@ class TestMatrixRoutingPhase2(unittest.TestCase):
                 {
                     "REGIME_ENGINE_MATRIX_MODE": "matrix_enabled",
                     "REGIME_ENGINE_MATRIX_SYMBOL_ALLOWLIST": "TEST",
+                    "REGIME_ENGINE_MATRIX_INTERPRETER": "shadow",
                 },
                 clear=False,
             ):
@@ -203,6 +224,7 @@ class TestMatrixRoutingPhase2(unittest.TestCase):
                 {
                     "REGIME_ENGINE_MATRIX_MODE": "matrix_enabled",
                     "REGIME_ENGINE_MATRIX_SYMBOL_ALLOWLIST": "OTHER",
+                    "REGIME_ENGINE_MATRIX_INTERPRETER": "shadow",
                 },
                 clear=False,
             ):

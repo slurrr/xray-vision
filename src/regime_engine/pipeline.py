@@ -17,9 +17,22 @@ from regime_engine.explainability import build_regime_output
 from regime_engine.explainability.permissions import permissions_for_regime
 from regime_engine.explainability.validate import validate_explainability
 from regime_engine.matrix.bridge import influences_to_evidence_snapshot
-from regime_engine.matrix.config import MatrixMode, load_matrix_routing_config
+from regime_engine.matrix.config import (
+    MatrixInterpreterKind,
+    MatrixMode,
+    load_matrix_routing_config,
+)
+from regime_engine.matrix.definition_v1 import (
+    MATRIX_DEFINITION_V1,
+    MATRIX_DEFINITION_V1_ERROR,
+)
 from regime_engine.matrix.interpreter import ShadowMatrixInterpreter
-from regime_engine.matrix.types import RegimeInfluence, RegimeInfluenceSet
+from regime_engine.matrix.interpreter_v1 import MatrixInterpreterV1
+from regime_engine.matrix.types import (
+    MatrixInterpreter,
+    RegimeInfluence,
+    RegimeInfluenceSet,
+)
 from regime_engine.observability import get_observability
 from regime_engine.resolution import resolve_regime
 from regime_engine.resolution.types import ResolutionResult
@@ -34,13 +47,25 @@ from regime_engine.state.embedded_evidence import (
     EmbeddedEvidenceResult,
     extract_embedded_evidence,
 )
+from regime_engine.state.embedded_neutral_evidence import (
+    EmbeddedNeutralEvidenceResult,
+    NeutralEvidenceOpinion,
+    NeutralEvidenceSnapshot,
+    extract_embedded_neutral_evidence,
+)
 from regime_engine.state.evidence import EvidenceOpinion, EvidenceSnapshot
 from regime_engine.state.state import RegimeState
 from regime_engine.state.update import select_opinion
 
-_MATRIX_INTERPRETER = ShadowMatrixInterpreter()
+_MATRIX_INTERPRETER_SHADOW = ShadowMatrixInterpreter()
+_MATRIX_INTERPRETER = _MATRIX_INTERPRETER_SHADOW
+_MATRIX_INTERPRETER_V1 = MatrixInterpreterV1(
+    definition=MATRIX_DEFINITION_V1,
+    error_message=MATRIX_DEFINITION_V1_ERROR,
+)
 _MATRIX_SHADOW_MAX_ITEMS = 25
 _MATRIX_ERROR_MAX_CHARS = 200
+_NEUTRAL_EVIDENCE_MAX_ITEMS = 25
 
 
 @dataclass(frozen=True)
@@ -87,6 +112,12 @@ def _apply_projection_to_resolution(
     )
 
 
+def _select_matrix_interpreter(kind: MatrixInterpreterKind) -> MatrixInterpreter:
+    if kind == MatrixInterpreterKind.V1:
+        return _MATRIX_INTERPRETER_V1
+    return _MATRIX_INTERPRETER
+
+
 def run_pipeline_with_state(
     snapshot: RegimeInputSnapshot,
 ) -> tuple[RegimeOutput, RegimeState]:
@@ -109,6 +140,10 @@ def run_pipeline_with_state(
     else:
         evidence = embedded.evidence
     evidence_origin = "embedded" if embedded is not None else "classical"
+    neutral_result = _extract_neutral_evidence_safely(snapshot)
+    _log_neutral_evidence_safely(snapshot, neutral_result)
+    matrix_evidence_origin = _matrix_evidence_origin(neutral_result)
+    neutral_invalid = neutral_result is not None and neutral_result.invalidations
     config = load_matrix_routing_config()
     scope_enabled = config.is_symbol_enabled(snapshot.symbol)
     effective_mode = config.effective_mode(snapshot.symbol)
@@ -121,9 +156,14 @@ def run_pipeline_with_state(
         fail_closed=config.fail_closed,
         strict_mismatch_fallback=config.strict_mismatch_fallback,
     )
+    interpreter = _select_matrix_interpreter(config.interpreter)
     influence_set, matrix_error = _compute_matrix_influences(
-        evidence,
-        evidence_origin=evidence_origin,
+        neutral_result.evidence if neutral_result is not None and not neutral_invalid else None,
+        symbol=snapshot.symbol,
+        engine_timestamp_ms=snapshot.timestamp,
+        evidence_origin=matrix_evidence_origin,
+        interpreter=interpreter,
+        missing_reason="neutral_evidence_invalid" if neutral_invalid else None,
     )
     matrix_evidence, bridge_error = _bridge_matrix_influences(
         influence_set,
@@ -199,15 +239,40 @@ def run_pipeline_with_state(
 
 
 def _compute_matrix_influences(
-    evidence: EvidenceSnapshot,
+    evidence: NeutralEvidenceSnapshot | None,
     *,
+    symbol: str,
+    engine_timestamp_ms: int,
     evidence_origin: str,
+    interpreter: MatrixInterpreter,
+    missing_reason: str | None = None,
 ) -> tuple[RegimeInfluenceSet | None, _MatrixError | None]:
-    try:
-        influence_set = _MATRIX_INTERPRETER.interpret(evidence)
+    if evidence is None:
+        error_code = missing_reason or "neutral_evidence_missing"
+        error = _MatrixError(
+            code=error_code,
+            error_type="NeutralEvidenceMissing",
+            error_message="neutral evidence payload missing",
+        )
         _log_matrix_shadow_safely(
-            evidence=evidence,
+            symbol=symbol,
+            engine_timestamp_ms=engine_timestamp_ms,
             evidence_origin=evidence_origin,
+            evidence=None,
+            influence_set=None,
+            interpreter_status="skipped",
+            error_code=error.code,
+            error_type=error.error_type,
+            error_message=error.error_message,
+        )
+        return None, error
+    try:
+        influence_set = interpreter.interpret(evidence)
+        _log_matrix_shadow_safely(
+            symbol=symbol,
+            engine_timestamp_ms=engine_timestamp_ms,
+            evidence_origin=evidence_origin,
+            evidence=evidence,
             influence_set=influence_set,
             interpreter_status="ok",
             error_code=None,
@@ -222,8 +287,10 @@ def _compute_matrix_influences(
             error_message=_truncate_error_message(str(exc)),
         )
         _log_matrix_shadow_safely(
-            evidence=evidence,
+            symbol=symbol,
+            engine_timestamp_ms=engine_timestamp_ms,
             evidence_origin=evidence_origin,
+            evidence=evidence,
             influence_set=None,
             interpreter_status="error",
             error_code=error.code,
@@ -276,8 +343,10 @@ def _bridge_matrix_influences(
 
 def _log_matrix_shadow_safely(
     *,
-    evidence: EvidenceSnapshot,
+    symbol: str,
+    engine_timestamp_ms: int,
     evidence_origin: str,
+    evidence: NeutralEvidenceSnapshot | None,
     influence_set: RegimeInfluenceSet | None,
     interpreter_status: str,
     error_code: str | None,
@@ -285,16 +354,18 @@ def _log_matrix_shadow_safely(
     error_message: str | None,
 ) -> None:
     try:
-        opinions = evidence.opinions
+        opinions: Sequence[NeutralEvidenceOpinion] = ()
+        if evidence is not None:
+            opinions = evidence.opinions
         influences: Sequence[RegimeInfluence] = ()
         if influence_set is not None:
             influences = influence_set.influences
         get_observability().log_matrix_shadow(
-            symbol=evidence.symbol,
-            engine_timestamp_ms=evidence.engine_timestamp_ms,
+            symbol=symbol,
+            engine_timestamp_ms=engine_timestamp_ms,
             evidence_origin=evidence_origin,
             opinion_count=len(opinions),
-            opinion_summaries=_summarize_opinions(opinions),
+            opinion_summaries=_summarize_neutral_opinions(opinions),
             influence_count=len(influences),
             influence_summaries=_summarize_influences(influences),
             interpreter_status=interpreter_status,
@@ -304,6 +375,51 @@ def _log_matrix_shadow_safely(
         )
     except Exception:
         return None
+
+
+def _extract_neutral_evidence_safely(
+    snapshot: RegimeInputSnapshot,
+) -> EmbeddedNeutralEvidenceResult | None:
+    try:
+        return extract_embedded_neutral_evidence(snapshot)
+    except Exception:
+        return None
+
+
+def _log_neutral_evidence_safely(
+    snapshot: RegimeInputSnapshot,
+    result: EmbeddedNeutralEvidenceResult | None,
+) -> None:
+    try:
+        if result is None:
+            get_observability().log_neutral_evidence(
+                symbol=snapshot.symbol,
+                engine_timestamp_ms=snapshot.timestamp,
+                payload_present=False,
+                opinion_count=0,
+                opinion_summaries=(),
+                invalidations=(),
+            )
+            return
+        summaries = _summarize_neutral_opinions(result.evidence.opinions)
+        get_observability().log_neutral_evidence(
+            symbol=snapshot.symbol,
+            engine_timestamp_ms=snapshot.timestamp,
+            payload_present=True,
+            opinion_count=len(result.evidence.opinions),
+            opinion_summaries=summaries,
+            invalidations=result.invalidations,
+        )
+    except Exception:
+        return None
+
+
+def _matrix_evidence_origin(result: EmbeddedNeutralEvidenceResult | None) -> str:
+    if result is None:
+        return "missing"
+    if result.invalidations:
+        return "neutral_invalid"
+    return "neutral"
 
 
 def _log_matrix_mode_safely(
@@ -457,6 +573,23 @@ def _summarize_opinions(opinions: Sequence[EvidenceOpinion]) -> list[dict[str, o
                 "regime": opinion.regime.value,
                 "strength": opinion.strength,
                 "confidence": opinion.confidence,
+            }
+        )
+    return summaries
+
+
+def _summarize_neutral_opinions(
+    opinions: Sequence[NeutralEvidenceOpinion],
+) -> list[dict[str, object]]:
+    summaries: list[dict[str, object]] = []
+    for opinion in opinions[:_NEUTRAL_EVIDENCE_MAX_ITEMS]:
+        summaries.append(
+            {
+                "type": opinion.type,
+                "direction": opinion.direction,
+                "strength": opinion.strength,
+                "confidence": opinion.confidence,
+                "source": opinion.source,
             }
         )
     return summaries

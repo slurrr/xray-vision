@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from regime_engine.contracts.regimes import Regime
-from regime_engine.state.evidence import EvidenceSnapshot
+from regime_engine.state.embedded_neutral_evidence import NeutralEvidenceSnapshot
 
 
 @dataclass(frozen=True)
@@ -24,4 +24,4 @@ class RegimeInfluenceSet:
 
 
 class MatrixInterpreter(Protocol):
-    def interpret(self, evidence: EvidenceSnapshot) -> RegimeInfluenceSet: ...
+    def interpret(self, evidence: NeutralEvidenceSnapshot) -> RegimeInfluenceSet: ...

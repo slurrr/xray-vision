@@ -1,6 +1,7 @@
 import unittest
 
 from composer.engine_evidence.compute import compute_engine_evidence_snapshot
+from composer.evidence.compute import compute_evidence_snapshot
 from composer.features.compute import compute_feature_snapshot
 from composer.legacy_snapshot.builder import build_legacy_snapshot
 from market_data.contracts import SCHEMA_NAME, SCHEMA_VERSION, RawMarketEvent
@@ -47,12 +48,14 @@ class TestComposeEngineEvidence(unittest.TestCase):
     def test_no_eligible_data_embeds_classical_opinion(self) -> None:
         feature_snapshot = compute_feature_snapshot((), symbol="TEST", engine_timestamp_ms=180_000)
         evidence_snapshot = compute_engine_evidence_snapshot(feature_snapshot)
+        neutral_evidence_snapshot = compute_evidence_snapshot(feature_snapshot)
         legacy_snapshot = build_legacy_snapshot(
             (),
             symbol="TEST",
             engine_timestamp_ms=180_000,
             feature_snapshot=feature_snapshot,
             evidence_snapshot=evidence_snapshot,
+            neutral_evidence_snapshot=neutral_evidence_snapshot,
         )
         self.assertIsNotNone(evidence_snapshot.opinions)
         self.assertIn(

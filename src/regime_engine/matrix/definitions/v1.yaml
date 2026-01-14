@@ -1,0 +1,22 @@
+defaults:
+  strength_weight: 1.0
+  confidence_weight: 1.0
+  strength_cap: null
+  confidence_cap: null
+sources:
+  - source: composer.classical
+  - source: composer.flow
+  - source: composer.volatility
+cells:
+  - source: composer.classical
+    type: REGIME_OPINION
+    direction: NEUTRAL
+    regime: CHOP_BALANCED
+  - source: composer.flow
+    type: FLOW_PRESSURE_OPINION
+    direction: NEUTRAL
+    regime: TREND_BUILD_UP
+  - source: composer.volatility
+    type: VOLATILITY_REGIME_OPINION
+    direction: NEUTRAL
+    regime: CHOP_BALANCED

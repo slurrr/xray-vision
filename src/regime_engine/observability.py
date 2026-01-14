@@ -300,6 +300,29 @@ class Observability:
             },
         )
 
+    def log_neutral_evidence(
+        self,
+        *,
+        symbol: str,
+        engine_timestamp_ms: int,
+        payload_present: bool,
+        opinion_count: int,
+        opinion_summaries: Sequence[Mapping[str, object]],
+        invalidations: Sequence[str],
+    ) -> None:
+        self.logger.log(
+            logging.INFO,
+            "regime_engine.evidence.neutral",
+            {
+                "symbol": symbol,
+                "engine_timestamp_ms": engine_timestamp_ms,
+                "payload_present": payload_present,
+                "opinion_count": opinion_count,
+                "opinion_summaries": list(opinion_summaries),
+                "invalidations": list(invalidations),
+            },
+        )
+
 
 _OBSERVABILITY = Observability(logger=NullLogger())
 
